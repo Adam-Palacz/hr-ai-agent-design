@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Przegląd CV - {% if candidate %}{{ candidate.full_name }}{% else %}{{ filename }}{% endif %}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .panel {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 25px;
+        }
+        .panel h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 22px;
+        }
+        .pdf-viewer {
+            width: 100%;
+            height: 800px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        .form-group textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        .form-group small {
+            display: block;
+            margin-top: 5px;
+            color: #666;
+            font-size: 12px;
+        }
+        .decision-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .decision-btn {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        .decision-btn.accepted {
+            border-color: #4caf50;
+            color: #4caf50;
+        }
+        .decision-btn.accepted.active {
+            background: #4caf50;
+            color: white;
+        }
+        .decision-btn.rejected {
+            border-color: #f44336;
+            color: #f44336;
+        }
+        .decision-btn.rejected.active {
+            background: #f44336;
+            color: white;
+        }
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .btn-submit:hover {
+            background: #5568d3;
+        }
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .alert-error {
+            background: #fee;
+            color: #c33;
+            border: 1px solid #fcc;
+        }
+        .required {
+            color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="panel">
+            <h2>📄 Podgląd CV</h2>
+            <iframe src="{{ url_for('uploaded_file', filename=filename) }}" class="pdf-viewer" type="application/pdf"></iframe>
+        </div>
+        
+        <div class="panel">
+            <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                <a href="{{ url_for('index') }}" style="color: #667eea; text-decoration: none;">← Powrót do listy</a>
+                <a href="{{ url_for('edit_candidate', candidate_id=candidate.id) }}" style="padding: 8px 16px; background: #667eea; color: white; text-decoration: none; border-radius: 4px; font-size: 14px;">✏️ Edytuj</a>
+            </div>
+            
+            <h2>📝 Formularz oceny</h2>
+            
+            {% if candidate %}
+            <div class="cv-info-box" style="background: #f0f7ff; border-left: 4px solid #667eea; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+                <h3 style="margin-bottom: 10px; color: #333;">📋 Informacje o kandydacie:</h3>
+                <p><strong>Imię i nazwisko:</strong> {{ candidate.full_name }}</p>
+                <p><strong>Email:</strong> {{ candidate.email }}</p>
+                <p><strong>Status:</strong> 
+                    {% if candidate.status.value == 'in_progress' %}W trakcie
+                    {% elif candidate.status.value == 'accepted' %}Zaakceptowany
+                    {% elif candidate.status.value == 'rejected' %}Odrzucony
+                    {% endif %}
+                </p>
+                <p><strong>Etap:</strong> 
+                    {% if candidate.stage.value == 'initial_screening' %}Pierwsza selekcja
+                    {% elif candidate.stage.value == 'hr_interview' %}Rozmowa z HR
+                    {% elif candidate.stage.value == 'technical_assessment' %}Weryfikacja wiedzy
+                    {% elif candidate.stage.value == 'final_interview' %}Rozmowa końcowa
+                    {% elif candidate.stage.value == 'offer' %}Oferta
+                    {% else %}{{ candidate.stage.value }}
+                    {% endif %}
+                </p>
+            </div>
+            {% endif %}
+            
+            {% if hr_notes %}
+            <div style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+                <h3 style="margin-bottom: 15px; color: #333;">📝 Historia notatek HR ({{ hr_notes|length }})</h3>
+                <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                    Poniżej znajdują się wszystkie notatki HR dodane dla tego kandydata. Każda notatka jest przypisana do etapu rekrutacji, na którym została utworzona.
+                </p>
+                {% for note in hr_notes %}
+                <div style="margin-bottom: 15px; padding: 12px; background: white; border-radius: 4px; border-left: 3px solid #2196f3;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px; align-items: center;">
+                        <div>
+                            <strong style="color: #1976d2; display: block; margin-bottom: 4px;">
+                                📌 Etap: 
+                                {% if note.stage.value == 'initial_screening' %}Pierwsza selekcja
+                                {% elif note.stage.value == 'hr_interview' %}Rozmowa HR
+                                {% elif note.stage.value == 'technical_assessment' %}Weryfikacja wiedzy
+                                {% elif note.stage.value == 'final_interview' %}Rozmowa końcowa
+                                {% elif note.stage.value == 'offer' %}Oferta
+                                {% else %}{{ note.stage.value }}{% endif %}
+                            </strong>
+                            <span style="color: #666; font-size: 12px;">
+                                Dodano: {{ note.created_at.strftime('%Y-%m-%d %H:%M') if note.created_at else 'N/A' }}
+                                {% if note.created_by %} • przez {{ note.created_by }}{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    <div style="color: #333; white-space: pre-wrap; background: #f9f9f9; padding: 10px; border-radius: 4px; margin-top: 8px;">{{ note.notes }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+                <p style="color: #856404; margin: 0;">ℹ️ Brak notatek HR dla tego kandydata. Notatka zostanie automatycznie dodana do bazy danych po wygenerowaniu feedbacku.</p>
+            </div>
+            {% endif %}
+            
+            {% if feedback_emails %}
+            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+                <h3 style="margin-bottom: 10px; color: #333;">📧 Wysłane emaile z feedbackiem:</h3>
+                {% for email in feedback_emails %}
+                <div style="margin-bottom: 10px; padding: 10px; background: white; border-radius: 4px;">
+                    <strong>Wysłano:</strong> {{ email.sent_at.strftime('%Y-%m-%d %H:%M') if email.sent_at else 'N/A' }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <form action="/process" method="post" id="reviewForm">
+                {% if candidate %}<input type="hidden" name="candidate_id" value="{{ candidate.id }}">{% endif %}
+                <input type="hidden" name="filename" value="{{ filename }}">
+                
+                {% if candidate %}
+                <div class="form-group" style="background: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 10px; color: #333; font-weight: 600;">📊 Etap rekrutacji:</label>
+                    <div style="color: #667eea; font-size: 16px; font-weight: 500;">
+                        {% if candidate.stage.value == 'initial_screening' %}Pierwsza selekcja
+                        {% elif candidate.stage.value == 'hr_interview' %}Rozmowa z HR
+                        {% elif candidate.stage.value == 'technical_assessment' %}Weryfikacja wiedzy
+                        {% elif candidate.stage.value == 'final_interview' %}Rozmowa końcowa
+                        {% elif candidate.stage.value == 'offer' %}Oferta
+                        {% else %}{{ candidate.stage.value }}{% endif %}
+                    </div>
+                    <input type="hidden" name="stage" value="{{ candidate.stage.value }}">
+                </div>
+                {% endif %}
+                
+                <div class="form-group">
+                    <label>Decyzja <span class="required">*</span></label>
+                    <div class="decision-buttons">
+                        <button type="button" class="decision-btn accepted" data-value="accepted">✅ Zaakceptuj</button>
+                        <button type="button" class="decision-btn rejected" data-value="rejected">❌ Odrzuć</button>
+                    </div>
+                    <input type="hidden" name="decision" id="decision" value="" required>
+                </div>
+                
+                {% if job_offer %}
+                <div class="form-group" style="background: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 10px; color: #333; font-weight: 600;">📋 Informacje o stanowisku:</label>
+                    <div style="margin-bottom: 10px;">
+                        <strong>Stanowisko:</strong> <span style="color: #667eea;">{{ job_offer.title }}</span>
+                    </div>
+                    {% if job_offer.company %}
+                    <div style="margin-bottom: 10px;">
+                        <strong>Firma:</strong> <span style="color: #667eea;">{{ job_offer.company }}</span>
+                    </div>
+                    {% endif %}
+                    {% if job_offer.description %}
+                    <div style="margin-top: 10px;">
+                        <strong>Opis stanowiska:</strong>
+                        <div style="margin-top: 5px; padding: 10px; background: white; border-radius: 4px; color: #555; white-space: pre-wrap; font-size: 13px; line-height: 1.6;">{{ job_offer.description }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
+                <div class="form-group">
+                    <label for="notes">Notatki HR <span class="required">*</span></label>
+                    <textarea name="notes" id="notes" required placeholder="Wpisz ocenę kandydata dla aktualnego etapu. Notatka zostanie automatycznie zapisana do bazy danych z informacją o etapie rekrutacji."></textarea>
+                    <small>
+                        <strong>ℹ️ Ważne:</strong> Notatka zostanie automatycznie zapisana do bazy danych z informacją o wybranym etapie rekrutacji. 
+                        Przy kolejnych etapach będziesz widzieć wszystkie poprzednie notatki. 
+                        AI użyje wszystkich notatek (w tym tej) do wygenerowania feedbacku.
+                    </small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="candidate_email">Email kandydata (wymagany przy odrzuceniu)</label>
+                    <input type="email" name="candidate_email" id="candidate_email" value="{% if candidate %}{{ candidate.email }}{% endif %}" placeholder="kandydat@example.com">
+                    <small>Email zostanie wysłany automatycznie przy odrzuceniu</small>
+                </div>
+                
+                <button type="submit" class="btn-submit" id="submitBtn">Przetwórz i wygeneruj feedback</button>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        const decisionButtons = document.querySelectorAll('.decision-btn');
+        const decisionInput = document.getElementById('decision');
+        const candidateEmail = document.getElementById('candidate_email');
+        const reviewForm = document.getElementById('reviewForm');
+        
+        // Initialize decision button state - always start with no selection
+        // This ensures buttons are unselected when candidate moves to next stage
+        decisionInput.value = '';
+        
+        // Update submit button text based on decision
+        const submitBtn = document.getElementById('submitBtn');
+        function updateSubmitButton() {
+            if (decisionInput.value === 'accepted') {
+                submitBtn.textContent = '✅ Zaakceptuj i przejdź do kolejnego etapu';
+                submitBtn.style.background = '#4caf50';
+            } else if (decisionInput.value === 'rejected') {
+                submitBtn.textContent = '❌ Odrzuć i wygeneruj feedback';
+                submitBtn.style.background = '#f44336';
+            } else {
+                submitBtn.textContent = 'Wybierz decyzję';
+                submitBtn.style.background = '#667eea';
+            }
+        }
+        
+        // Update button on page load
+        updateSubmitButton();
+        
+        decisionButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                decisionButtons.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                decisionInput.value = this.dataset.value;
+                
+                // Make email required if rejected
+                if (this.dataset.value === 'rejected') {
+                    candidateEmail.required = true;
+                } else {
+                    candidateEmail.required = false;
+                }
+                
+                // Update submit button text
+                updateSubmitButton();
+            });
+        });
+        
+        let isSubmitting = false;
+        
+        reviewForm.addEventListener('submit', function(e) {
+            // Prevent double submission
+            if (isSubmitting) {
+                e.preventDefault();
+                return false;
+            }
+            
+            if (!decisionInput.value) {
+                e.preventDefault();
+                alert('Wybierz decyzję (Zaakceptuj lub Odrzuć)');
+                return false;
+            }
+            
+            if (decisionInput.value === 'rejected' && !candidateEmail.value.trim()) {
+                e.preventDefault();
+                alert('Email kandydata jest wymagany przy odrzuceniu');
+                return false;
+            }
+            
+            // Mark as submitting and disable button
+            isSubmitting = true;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Przetwarzanie...';
+            submitBtn.style.opacity = '0.6';
+            submitBtn.style.cursor = 'not-allowed';
+        });
+    </script>
+</body>
+</html>
+

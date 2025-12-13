@@ -1,0 +1,15 @@
+{
+  "job_offer": {
+    "title": "Senior DevOps Engineer",
+    "company": "TechCorp Inc.",
+    "location": "Remote / Warsaw, Poland",
+    "description": "We are looking for an experienced DevOps Engineer to join our team. You will be responsible for designing, implementing, and maintaining our cloud infrastructure, CI/CD pipelines, and automation systems.\n\nRequired Qualifications:\n- 5+ years of experience in DevOps/Cloud Engineering\n- Strong knowledge of AWS and/or Azure\n- Experience with Infrastructure as Code (Terraform, CloudFormation)\n- Proficiency in Python or Bash scripting\n- Experience with CI/CD tools (GitLab CI, GitHub Actions, Jenkins)\n- Knowledge of Kubernetes and containerization\n- Strong problem-solving and communication skills\n\nNice to Have:\n- Experience with MLOps\n- Knowledge of monitoring tools (Prometheus, Grafana)\n- Certifications (AWS, Azure, Kubernetes)\n- Experience with Ansible\n- Knowledge of security best practices\n\nBenefits:\n- Remote work\n- Flexible working hours\n- Private health insurance\n- Learning budget\n- Stock options"
+  },
+  "hr_feedback": {
+    "decision": "accepted",
+    "notes": "Candidate shows strong potential and meets most requirements. Strong technical background in cloud platforms, excellent experience with Infrastructure as Code, good communication skills, and relevant certifications. Good fit for the role with some learning curve expected. Could benefit from more Kubernetes production experience and has limited experience with MLOps tools.",
+    "interviewer_name": "HR Team",
+    "missing_requirements": []
+  }
+}
+

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista Kandydatów - HR</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f7fa;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-actions {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        h1 {
+            color: #333;
+            font-size: 32px;
+        }
+        .btn-add {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+        .btn-add:hover {
+            background: #5568d3;
+        }
+        .candidates-table {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        thead {
+            background: #667eea;
+            color: white;
+        }
+        th {
+            padding: 16px;
+            text-align: left;
+            font-weight: 600;
+        }
+        td {
+            padding: 16px;
+            border-bottom: 1px solid #eee;
+        }
+        tr:hover {
+            background: #f8f9ff;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-in_progress {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .status-accepted {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-rejected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .stage-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            background: #e9ecef;
+            color: #495057;
+        }
+        .btn-view {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        .btn-view:hover {
+            background: #5568d3;
+        }
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .alert-error {
+            background: #fee;
+            color: #c33;
+            border: 1px solid #fcc;
+        }
+        .alert-success {
+            background: #efe;
+            color: #3c3;
+            border: 1px solid #cfc;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 Lista Kandydatów</h1>
+            <div style="display: flex; gap: 10px;">
+                <a href="{{ url_for('admin_panel') }}" class="btn-add" style="background: #6c757d;">🔐 Admin Panel</a>
+                <a href="{{ url_for('positions_list') }}" class="btn-add" style="background: #28a745;">📋 Pozycje</a>
+                <a href="{{ url_for('add_candidate') }}" class="btn-add">+ Dodaj Kandydata</a>
+            </div>
+        </div>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <div class="candidates-table">
+            {% if candidates %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Imię i Nazwisko</th>
+                        <th>Email</th>
+                        <th>Stanowisko</th>
+                        <th>Etap</th>
+                        <th>Status</th>
+                        <th>Akcje</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for candidate in candidates %}
+                    <tr>
+                        <td><strong>{{ candidate.full_name }}</strong></td>
+                        <td>{{ candidate.email }}</td>
+                        <td>
+                            {% if candidate.position_title %}
+                                <strong>{{ candidate.position_title }}</strong><br>
+                                <small style="color: #666;">{{ candidate.position_company }}</small>
+                            {% else %}
+                                <span style="color: #999;">Brak</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="stage-badge">
+                                {% if candidate.stage.value == 'initial_screening' %}
+                                    Pierwsza selekcja
+                                {% elif candidate.stage.value == 'hr_interview' %}
+                                    Rozmowa z HR
+                                {% elif candidate.stage.value == 'technical_assessment' %}
+                                    Weryfikacja wiedzy
+                                {% elif candidate.stage.value == 'final_interview' %}
+                                    Rozmowa końcowa
+                                {% elif candidate.stage.value == 'offer' %}
+                                    Oferta
+                                {% else %}
+                                    {{ candidate.stage.value }}
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="status-badge status-{{ candidate.status.value }}">
+                                {% if candidate.status.value == 'in_progress' %}
+                                    W trakcie
+                                {% elif candidate.status.value == 'accepted' %}
+                                    Zaakceptowany
+                                {% elif candidate.status.value == 'rejected' %}
+                                    Odrzucony
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('candidate_detail', candidate_id=candidate.id) }}" class="btn-view">Zobacz</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon">📭</div>
+                <h2>Brak kandydatów</h2>
+                <p style="margin-top: 10px;">Dodaj pierwszego kandydata, aby rozpocząć rekrutację.</p>
+                <a href="{{ url_for('add_candidate') }}" class="btn-add" style="margin-top: 20px; display: inline-block;">+ Dodaj Kandydata</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
+
