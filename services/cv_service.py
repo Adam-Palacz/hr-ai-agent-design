@@ -24,7 +24,8 @@ class CVService:
     def process_cv_from_pdf(
         self,
         pdf_path: str,
-        verbose: bool = False
+        verbose: bool = False,
+        candidate_id: Optional[int] = None
     ) -> CVData:
         """
         Process CV from PDF file with proper error handling.
@@ -60,7 +61,7 @@ class CVService:
         
         try:
             logger.info("Starting CV parsing process...")
-            cv_data = self.parser.parse_cv_from_pdf(str(pdf_path_obj), verbose=verbose)
+            cv_data = self.parser.parse_cv_from_pdf(str(pdf_path_obj), verbose=verbose, candidate_id=candidate_id)
             logger.info(f"Successfully parsed CV for: {cv_data.full_name}")
             logger.info(f"Extracted data: {len(cv_data.education)} education entries, {len(cv_data.experience)} experience entries, {len(cv_data.skills)} skills")
             return cv_data

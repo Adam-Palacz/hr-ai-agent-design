@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Widok Bazy Danych - HR</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f7fa;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        h1 {
+            color: #333;
+            font-size: 32px;
+        }
+        .nav-links {
+            display: flex;
+            gap: 15px;
+        }
+        .btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: background 0.3s;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover {
+            background: #5568d3;
+        }
+        .btn-export {
+            background: #10b981;
+        }
+        .btn-export:hover {
+            background: #059669;
+        }
+        .section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+        .section-header {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .section-header h2 {
+            color: #333;
+            font-size: 24px;
+        }
+        .section-content {
+            padding: 20px 30px;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        thead {
+            background: #f8f9fa;
+        }
+        th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            border-bottom: 2px solid #dee2e6;
+            position: sticky;
+            top: 0;
+            background: #f8f9fa;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e9ecef;
+            color: #495057;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .badge-in_progress {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .badge-accepted {
+            background: #d4edda;
+            color: #155724;
+        }
+        .badge-rejected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+        .table-info {
+            color: #6c757d;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        .json-view {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🗄️ Widok Bazy Danych</h1>
+            <div class="nav-links">
+                <a href="{{ url_for('index') }}" class="btn">🏠 Strona główna</a>
+                <a href="{{ url_for('admin_panel') }}" class="btn">📊 Panel Admin</a>
+                <a href="{{ url_for('db_export') }}" class="btn btn-export">💾 Eksportuj JSON</a>
+            </div>
+        </div>
+
+        {% for table_name in tables %}
+        <div class="section">
+            <div class="section-header">
+                <h2>📋 {{ table_name }} ({{ table_data[table_name]['count'] }} rekordów)</h2>
+            </div>
+            <div class="section-content">
+                {% if table_data[table_name]['rows'] %}
+                <table>
+                    <thead>
+                        <tr>
+                            {% for column in table_data[table_name]['columns'] %}
+                            <th>{{ column }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in table_data[table_name]['rows'] %}
+                        <tr>
+                            {% for column in table_data[table_name]['columns'] %}
+                            <td>
+                                {% if row[column] is none %}
+                                    <em style="color: #6c757d;">NULL</em>
+                                {% elif column == 'email_content' or column == 'notes' %}
+                                    <div class="json-view">{{ row[column][:200] if row[column] else '' }}{% if row[column] and row[column]|length > 200 %}...{% endif %}</div>
+                                {% elif column == 'status' %}
+                                    <span class="badge badge-{{ row[column] }}">{{ row[column] }}</span>
+                                {% elif column == 'stage' %}
+                                    {% set stage_display = {
+                                        'initial_screening': 'Pierwsza selekcja',
+                                        'hr_interview': 'Rozmowa HR',
+                                        'technical_assessment': 'Weryfikacja wiedzy',
+                                        'final_interview': 'Rozmowa końcowa',
+                                        'offer': 'Oferta'
+                                    } %}
+                                    {{ stage_display.get(row[column], row[column]) }}
+                                {% elif column == 'consent_for_other_positions' %}
+                                    {% if row[column] == 1 %}✅ Tak{% elif row[column] == 0 %}❌ Nie{% else %}❓ Nie określono{% endif %}
+                                {% else %}
+                                    {{ row[column] }}
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <div class="table-info">
+                    Tabela zawiera {{ table_data[table_name]['count'] }} rekord(ów) z {{ table_data[table_name]['columns']|length }} kolumnami.
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-state-icon">📭</div>
+                    <p>Tabela jest pusta</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>
+

@@ -1,10 +1,14 @@
 """Simple web application for HR to review CVs and send feedback emails."""
 import os
 import smtplib
+import threading
+import json
+from datetime import datetime
+from typing import Optional
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pathlib import Path
-from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, Response
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
@@ -13,13 +17,17 @@ from config.job_config import load_job_config, create_job_offer_from_config
 from core.logger import logger, setup_logger
 from agents.cv_parser_agent import CVParserAgent
 from agents.feedback_agent import FeedbackAgent
+from agents.validation_agent import FeedbackValidatorAgent
+from agents.correction_agent import FeedbackCorrectionAgent
 from services.cv_service import CVService
 from services.feedback_service import FeedbackService
 from models.feedback_models import HRFeedback, Decision, FeedbackFormat
 from database.models import (
     init_db, get_all_candidates, get_candidate_by_id, create_candidate,
     update_candidate, save_feedback_email, get_feedback_emails_for_candidate,
-    get_all_feedback_emails, CandidateStatus, RecruitmentStage, 
+    get_all_feedback_emails, get_feedback_email_by_message_id,
+    save_model_response, get_model_responses_for_candidate, get_all_model_responses,
+    CandidateStatus, RecruitmentStage, 
     get_all_positions, create_position, get_position_by_id, update_position, delete_position,
     HRNote, create_hr_note, get_hr_notes_for_candidate, get_all_hr_notes
 )
@@ -95,7 +103,7 @@ def _get_next_stage(current_stage: RecruitmentStage) -> RecruitmentStage:
         return RecruitmentStage.HR_INTERVIEW
 
 
-def send_email_gmail(to_email: str, subject: str, html_content: str) -> bool:
+def send_email_gmail(to_email: str, subject: str, html_content: str, message_id: Optional[str] = None) -> tuple[bool, Optional[str]]:
     """
     Send email using Gmail SMTP.
     
@@ -103,19 +111,31 @@ def send_email_gmail(to_email: str, subject: str, html_content: str) -> bool:
         to_email: Recipient email address
         subject: Email subject
         html_content: HTML email content
+        message_id: Optional Message-ID (if not provided, will be generated)
         
     Returns:
-        True if sent successfully, False otherwise
+        Tuple of (success: bool, message_id: Optional[str])
     """
     if not GMAIL_USERNAME or not GMAIL_PASSWORD:
         logger.error("Gmail credentials not configured. Set GMAIL_USERNAME and GMAIL_PASSWORD in .env")
-        return False
+        return False, None
     
     try:
+        import uuid
+        import socket
+        
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
         msg['From'] = GMAIL_USERNAME
         msg['To'] = to_email
+        
+        # Generate Message-ID if not provided
+        if not message_id:
+            # Generate a unique Message-ID following RFC 5322 format
+            domain = GMAIL_USERNAME.split('@')[1] if '@' in GMAIL_USERNAME else socket.getfqdn()
+            message_id = f"<{uuid.uuid4().hex}@{domain}>"
+        
+        msg['Message-ID'] = message_id
         
         # Add HTML content
         html_part = MIMEText(html_content, 'html', 'utf-8')
@@ -127,17 +147,32 @@ def send_email_gmail(to_email: str, subject: str, html_content: str) -> bool:
             server.login(GMAIL_USERNAME, GMAIL_PASSWORD)
             server.send_message(msg)
         
-        logger.info(f"Email sent successfully to {to_email} via Gmail")
-        return True
+        logger.info(f"Email sent successfully to {to_email} via Gmail with Message-ID: {message_id}")
+        return True, message_id
     except Exception as e:
         logger.error(f"Failed to send email to {to_email}: {str(e)}")
-        return False
+        return False, None
 
 
 @app.route('/')
 def index():
     """Main page with list of candidates."""
     candidates = get_all_candidates()
+    positions = get_all_positions()
+    
+    # Create position lookup dictionary
+    position_dict = {pos.id: pos for pos in positions}
+    
+    # Add position information to each candidate
+    for candidate in candidates:
+        if candidate.position_id and candidate.position_id in position_dict:
+            position = position_dict[candidate.position_id]
+            candidate.position_title = position.title
+            candidate.position_company = position.company
+        else:
+            candidate.position_title = None
+            candidate.position_company = None
+    
     return render_template('candidates_list.html', candidates=candidates)
 
 
@@ -198,23 +233,22 @@ def candidate_detail(candidate_id):
     # Get feedback emails for this candidate
     feedback_emails = get_feedback_emails_for_candidate(candidate_id)
     
-    # Create job offer from candidate's position
+    # Create job offer from candidate's position in database
     job_offer = None
     if candidate.position_id:
-        # Try to load from config first
-        try:
-            config = load_job_config(GMAIL_CONFIG_PATH)
-            job_offer = create_job_offer_from_config(config)
-        except Exception as e:
-            logger.warning(f"Could not load job config: {str(e)}")
-            # Create from candidate position info
+        # Get position from database
+        position = get_position_by_id(candidate.position_id)
+        if position:
             from models.job_models import JobOffer
             job_offer = JobOffer(
-                title=getattr(candidate, 'position_title', ''),
-                company=getattr(candidate, 'position_company', ''),
+                title=position.title,
+                company=position.company,
                 location="",
-                description=getattr(candidate, 'position_description', '')
+                description=position.description or ""
             )
+            logger.info(f"Loaded job offer from database: {job_offer.title} at {job_offer.company}")
+        else:
+            logger.warning(f"Position ID {candidate.position_id} not found in database")
     
     # Get HR notes for this candidate
     hr_notes = get_hr_notes_for_candidate(candidate_id)
@@ -490,7 +524,7 @@ def process_feedback():
             return redirect(url_for('candidate_detail', candidate_id=candidate_id))
         
     elif decision == 'rejected':
-        # REJECTED: Generate feedback and send email
+        # REJECTED: Generate feedback and send email in background
         # Only now we need to parse CV and generate feedback
         
         filepath = Path(candidate.cv_path) if candidate.cv_path else UPLOAD_FOLDER / filename
@@ -498,45 +532,78 @@ def process_feedback():
             flash('Plik nie został znaleziony', 'error')
             return redirect(url_for('candidate_detail', candidate_id=candidate_id))
         
+        # Update candidate status to REJECTED immediately
         try:
-            # Initialize agents (only for rejected candidates)
-            logger.info("Initializing agents for feedback generation...")
-            cv_parser = CVParserAgent(
-                model_name=settings.openai_model,
-                vision_model_name=settings.openai_vision_model,
-                use_ocr=settings.use_ocr,
-                temperature=settings.openai_temperature,
-                api_key=settings.api_key,
-                timeout=settings.openai_timeout,
-                max_retries=settings.openai_max_retries
+            update_candidate(
+                candidate_id,
+                status=CandidateStatus.REJECTED.value,
+                stage=current_stage.value
             )
-            
-            feedback_agent = FeedbackAgent(
-                model_name=settings.openai_model,
-                temperature=settings.openai_feedback_temperature,
-                api_key=settings.api_key,
-                timeout=settings.openai_timeout,
-                max_retries=settings.openai_max_retries
-            )
-            
-            # Initialize services
-            cv_service = CVService(cv_parser)
-            feedback_service = FeedbackService(feedback_agent)
-            
-            # Parse CV (only for rejected candidates)
-            logger.info(f"Processing CV for feedback generation: {filename}")
-            cv_data = cv_service.process_cv_from_pdf(str(filepath), verbose=False)
-            
-            # Try to load job offer from config
-            from models.job_models import JobOffer
+            logger.info(f"Updated candidate {candidate_id}: status=rejected, stage={current_stage.value}")
+        except Exception as e:
+            logger.warning(f"Could not update candidate status/stage: {str(e)}")
+        
+        # Start background processing
+        def process_feedback_background():
+            """Process feedback generation and email sending in background."""
             try:
-                config = load_job_config(GMAIL_CONFIG_PATH)
-                job_offer = create_job_offer_from_config(config)
-                logger.info(f"Using job offer from config: {job_offer.title} at {job_offer.company}")
-            except Exception as e:
-                logger.warning(f"Could not load job config: {str(e)}")
-                # If config not available, try to get from candidate's position
-                if candidate.position_id:
+                # Initialize agents (only for rejected candidates)
+                logger.info(f"[Background] Initializing agents for feedback generation for candidate {candidate_id}...")
+                cv_parser = CVParserAgent(
+                    model_name=settings.openai_model,
+                    vision_model_name=settings.openai_vision_model,
+                    use_ocr=settings.use_ocr,
+                    temperature=settings.openai_temperature,
+                    api_key=settings.api_key,
+                    timeout=settings.openai_timeout,
+                    max_retries=settings.openai_max_retries
+                )
+                
+                feedback_agent = FeedbackAgent(
+                    model_name=settings.openai_model,
+                    temperature=settings.openai_feedback_temperature,
+                    api_key=settings.api_key,
+                    timeout=settings.openai_timeout,
+                    max_retries=settings.openai_max_retries
+                )
+                
+                # Initialize validation and correction agents
+                from agents.validation_agent import FeedbackValidatorAgent
+                from agents.correction_agent import FeedbackCorrectionAgent
+                
+                validator_agent = FeedbackValidatorAgent(
+                    model_name=settings.openai_model,  # Can use different model for validation
+                    temperature=0.0,  # Strict validation
+                    api_key=settings.api_key,
+                    timeout=settings.openai_timeout,
+                    max_retries=settings.openai_max_retries
+                )
+                
+                correction_agent = FeedbackCorrectionAgent(
+                    model_name=settings.openai_model,  # Can use different model for correction
+                    temperature=0.3,  # Balanced creativity for corrections
+                    api_key=settings.api_key,
+                    timeout=settings.openai_timeout,
+                    max_retries=settings.openai_max_retries
+                )
+                
+                # Initialize services
+                cv_service = CVService(cv_parser)
+                feedback_service = FeedbackService(
+                    feedback_agent,
+                    validator_agent=validator_agent,
+                    correction_agent=correction_agent,
+                    max_validation_iterations=2
+                )
+                
+                # Parse CV (only for rejected candidates)
+                logger.info(f"[Background] Processing CV for feedback generation: {filename}")
+                cv_data = cv_service.process_cv_from_pdf(str(filepath), verbose=False, candidate_id=candidate_id)
+                
+                # Get job offer from candidate's position in database
+                from models.job_models import JobOffer
+                candidate = get_candidate_by_id(candidate_id)
+                if candidate and candidate.position_id:
                     position = get_position_by_id(candidate.position_id)
                     if position:
                         job_offer = JobOffer(
@@ -545,7 +612,9 @@ def process_feedback():
                             location="",
                             description=position.description or ""
                         )
+                        logger.info(f"[Background] Using job offer from database: {job_offer.title} at {job_offer.company}")
                     else:
+                        logger.warning(f"[Background] Position ID {candidate.position_id} not found in database")
                         job_offer = JobOffer(
                             title="Position",
                             company="",
@@ -553,105 +622,125 @@ def process_feedback():
                             description=""
                         )
                 else:
+                    logger.warning(f"[Background] Candidate {candidate_id} has no position_id assigned")
                     job_offer = JobOffer(
                         title="Position",
                         company="",
                         location="",
                         description=""
                     )
-            
-            # Get all HR notes for this candidate (including the one just saved)
-            hr_notes_list = get_hr_notes_for_candidate(candidate_id)
-            
-            # Combine all HR notes into a single notes string for AI
-            all_notes = []
-            if hr_notes_list:
-                for note in hr_notes_list:
-                    stage_name = note.stage.value if isinstance(note.stage, RecruitmentStage) else note.stage
-                    stage_display = {
-                        'initial_screening': 'Pierwsza selekcja',
-                        'hr_interview': 'Rozmowa HR',
-                        'technical_assessment': 'Weryfikacja wiedzy',
-                        'final_interview': 'Rozmowa końcowa',
-                        'offer': 'Oferta'
-                    }.get(stage_name, stage_name)
-                    note_date = note.created_at.strftime('%Y-%m-%d %H:%M') if note.created_at else 'N/A'
-                    all_notes.append(f"[{stage_display} - {note_date}]\n{note.notes}")
-            
-            # Combine all notes for feedback generation
-            combined_notes = "\n\n---\n\n".join(all_notes) if all_notes else notes
-            
-            # Create HR feedback for AI
-            hr_feedback = HRFeedback(
-                decision=Decision.REJECTED,
-                notes=combined_notes,
-                position_applied=job_offer.title if job_offer else "Position",
-                interviewer_name="HR Team"
-            )
-            
-            # Generate feedback
-            logger.info(f"Generating feedback for rejected candidate: {cv_data.full_name}")
-            candidate_feedback = feedback_service.generate_feedback(
-                cv_data,
-                hr_feedback,
-                job_offer=job_offer,
-                output_format=FeedbackFormat.HTML,
-                save_to_file=False
-            )
-            
-            # Get HTML content with consent information
-            consent_value = getattr(candidate, 'consent_for_other_positions', None)
-            html_content = feedback_service.get_feedback_html(candidate_feedback, consent_for_other_positions=consent_value)
-            
-            # Update candidate status to REJECTED
-            try:
-                update_candidate(
-                    candidate_id,
-                    status=CandidateStatus.REJECTED.value,
-                    stage=current_stage.value
+                
+                # Get all HR notes for this candidate (including the one just saved)
+                hr_notes_list = get_hr_notes_for_candidate(candidate_id)
+                
+                # Combine all HR notes into a single notes string for AI
+                all_notes = []
+                if hr_notes_list:
+                    for note in hr_notes_list:
+                        stage_name = note.stage.value if isinstance(note.stage, RecruitmentStage) else note.stage
+                        stage_display = {
+                            'initial_screening': 'Pierwsza selekcja',
+                            'hr_interview': 'Rozmowa HR',
+                            'technical_assessment': 'Weryfikacja wiedzy',
+                            'final_interview': 'Rozmowa końcowa',
+                            'offer': 'Oferta'
+                        }.get(stage_name, stage_name)
+                        note_date = note.created_at.strftime('%Y-%m-%d %H:%M') if note.created_at else 'N/A'
+                        all_notes.append(f"[{stage_display} - {note_date}]\n{note.notes}")
+                
+                # Combine all notes for feedback generation
+                combined_notes = "\n\n---\n\n".join(all_notes) if all_notes else notes
+                
+                # Create HR feedback for AI
+                hr_feedback = HRFeedback(
+                    decision=Decision.REJECTED,
+                    notes=combined_notes,
+                    position_applied=job_offer.title if job_offer else "Position",
+                    interviewer_name="HR Team"
                 )
-                logger.info(f"Updated candidate {candidate_id}: status=rejected, stage={current_stage.value}")
-            except Exception as e:
-                logger.warning(f"Could not update candidate status/stage: {str(e)}")
-            
-            # Save feedback email to database
-            try:
-                save_feedback_email(candidate_id, html_content)
-            except Exception as e:
-                logger.warning(f"Could not save feedback email: {str(e)}")
-            
-            # If rejected and email provided, send email
-            email_sent = False
-            if candidate_email:
-                subject = f"Odpowiedź na aplikację - {job_offer.title if job_offer else 'Stanowisko'}"
-                if not GMAIL_USERNAME or not GMAIL_PASSWORD:
-                    flash(
-                        'Email nie został wysłany - brak konfiguracji Gmail. '
-                        'Dodaj GMAIL_USERNAME i GMAIL_PASSWORD do pliku .env',
-                        'error'
+                
+                # Generate feedback
+                logger.info(f"[Background] Generating feedback for rejected candidate ID: {candidate_id}")
+                candidate_feedback, is_validated, validation_error_info = feedback_service.generate_feedback(
+                    cv_data,
+                    hr_feedback,
+                    job_offer=job_offer,
+                    output_format=FeedbackFormat.HTML,
+                    save_to_file=False,
+                    candidate_id=candidate_id
+                )
+                
+                # Check if validation failed
+                if not is_validated and validation_error_info:
+                    # Save validation error to database
+                    logger.error(f"[Background] Validation failed for candidate {candidate_id}. Saving error to database.")
+                    
+                    # Get model responses for this candidate to include in error
+                    from database.models import get_model_responses_for_candidate, save_validation_error
+                    model_responses = get_model_responses_for_candidate(candidate_id)
+                    
+                    # Create summary of model responses
+                    model_responses_summary = []
+                    for resp in model_responses:
+                        model_responses_summary.append({
+                            'agent_type': resp.agent_type,
+                            'model_name': resp.model_name,
+                            'created_at': resp.created_at.isoformat() if resp.created_at else None
+                        })
+                    
+                    # Save error to database
+                    save_validation_error(
+                        candidate_id=candidate_id,
+                        error_message=f"Validation failed after {feedback_service.max_iterations} iterations. Feedback was not approved by validator.",
+                        feedback_html_content=candidate_feedback.html_content,
+                        validation_results=json.dumps(validation_error_info.get('validation_results', []), ensure_ascii=False, indent=2),
+                        model_responses_summary=json.dumps(model_responses_summary, ensure_ascii=False, indent=2)
                     )
-                elif send_email_gmail(candidate_email, subject, html_content):
-                    flash(f'Email został wysłany do {candidate_email}', 'success')
-                    email_sent = True
-                else:
-                    flash(
-                        'Błąd podczas wysyłania emaila. Sprawdź konfigurację Gmail '
-                        '(GMAIL_USERNAME i GMAIL_PASSWORD w .env)',
-                        'error'
-                    )
-            
-            # Save feedback email to database (always save, even if email not sent)
-            try:
-                save_feedback_email(candidate_id, html_content)
+                    
+                    logger.error(f"[Background] Validation error saved for candidate {candidate_id}. Email will NOT be sent.")
+                    return  # Exit without sending email
+                
+                # Get candidate again to get consent value
+                candidate = get_candidate_by_id(candidate_id)
+                consent_value = getattr(candidate, 'consent_for_other_positions', None) if candidate else None
+                
+                # Get HTML content with consent information
+                html_content = feedback_service.get_feedback_html(candidate_feedback, consent_for_other_positions=consent_value)
+                
+                # If rejected and email provided, send email first to get Message-ID
+                message_id = None
+                feedback_email_id = None
+                if candidate_email:
+                    subject = f"Odpowiedź na aplikację - {job_offer.title if job_offer else 'Stanowisko'}"
+                    if not GMAIL_USERNAME or not GMAIL_PASSWORD:
+                        logger.warning(f"[Background] Email not sent - Gmail credentials not configured for candidate {candidate_id}")
+                    else:
+                        success, message_id = send_email_gmail(candidate_email, subject, html_content)
+                        if success:
+                            logger.info(f"[Background] Email sent successfully to {candidate_email} for candidate {candidate_id} with Message-ID: {message_id}")
+                        else:
+                            logger.error(f"[Background] Failed to send email to {candidate_email} for candidate {candidate_id}")
+                
+                # Save feedback email to database with Message-ID
+                try:
+                    feedback_email = save_feedback_email(candidate_id, html_content, message_id=message_id)
+                    feedback_email_id = feedback_email.id
+                    logger.info(f"[Background] Feedback email saved to database for candidate {candidate_id} with Message-ID: {message_id}")
+                except Exception as e:
+                    logger.error(f"[Background] Could not save feedback email: {str(e)}", exc_info=True)
+                
+                logger.info(f"[Background] Feedback processing completed for candidate {candidate_id}")
+                
             except Exception as e:
-                logger.warning(f"Could not save feedback email: {str(e)}")
-            
-            return redirect(url_for('candidate_detail', candidate_id=candidate_id))
+                logger.error(f"[Background] Error processing CV and generating feedback for candidate {candidate_id}: {str(e)}", exc_info=True)
         
-        except Exception as e:
-            logger.error(f"Error processing CV and generating feedback: {str(e)}", exc_info=True)
-            flash(f'Błąd podczas przetwarzania CV i generowania feedbacku: {str(e)}', 'error')
-            return redirect(url_for('candidate_detail', candidate_id=candidate_id))
+        # Start background thread
+        thread = threading.Thread(target=process_feedback_background, daemon=True)
+        thread.start()
+        
+        # Return immediately with success message
+        flash('Kandydat został odrzucony. Generowanie feedbacku i wysyłanie emaila odbywa się w tle. Sprawdź logi lub historię emaili, aby zobaczyć status.', 'success')
+        return redirect(url_for('candidate_detail', candidate_id=candidate_id))
 
 
 @app.route('/admin')
@@ -662,6 +751,8 @@ def admin_panel():
         candidates = get_all_candidates()
         positions = get_all_positions()
         feedback_emails = get_all_feedback_emails()
+        hr_notes = get_all_hr_notes()
+        model_responses = get_all_model_responses()
         
         # Get position names for candidates
         position_dict = {pos.id: pos for pos in positions}
@@ -681,13 +772,121 @@ def admin_panel():
                 email.candidate_name = "Nieznany kandydat"
                 email.candidate_email = "N/A"
         
+        # Get candidate names for HR notes and ensure stage is accessible
+        for note in hr_notes:
+            if note.candidate_id in candidate_dict:
+                note.candidate_name = candidate_dict[note.candidate_id].full_name
+            else:
+                note.candidate_name = "Nieznany kandydat"
+            # Ensure stage is a string value for template
+            if hasattr(note.stage, 'value'):
+                note.stage_value = note.stage.value
+            else:
+                note.stage_value = str(note.stage) if note.stage else 'unknown'
+        
+        # Get candidate names for model responses
+        for response in model_responses:
+            if response.candidate_id and response.candidate_id in candidate_dict:
+                response.candidate_name = candidate_dict[response.candidate_id].full_name
+            else:
+                response.candidate_name = "Nieznany kandydat"
+        
         return render_template('admin.html', 
                             candidates=candidates,
                             positions=positions,
-                            feedback_emails=feedback_emails)
+                            feedback_emails=feedback_emails,
+                            hr_notes=hr_notes,
+                            model_responses=model_responses)
     except Exception as e:
         logger.error(f"Error loading admin panel: {str(e)}", exc_info=True)
         flash(f'Błąd podczas ładowania panelu admina: {str(e)}', 'error')
+        return redirect(url_for('index'))
+
+
+@app.route('/db-view')
+def db_view():
+    """Simple database viewer showing all tables and data."""
+    try:
+        from database.models import get_db
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Get all table names
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        tables = [row[0] for row in cursor.fetchall()]
+        
+        # Get data from each table
+        table_data = {}
+        for table in tables:
+            cursor.execute(f"SELECT * FROM {table}")
+            rows = cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
+            table_data[table] = {
+                'columns': columns,
+                'rows': [dict(row) for row in rows],
+                'count': len(rows)
+            }
+        
+        conn.close()
+        
+        return render_template('db_view.html', tables=tables, table_data=table_data)
+    except Exception as e:
+        logger.error(f"Error loading database view: {str(e)}", exc_info=True)
+        flash(f'Błąd podczas ładowania widoku bazy danych: {str(e)}', 'error')
+        return redirect(url_for('index'))
+
+
+@app.route('/db-export')
+def db_export():
+    """Export all database data as JSON."""
+    try:
+        from database.models import get_db
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Get all table names
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        tables = [row[0] for row in cursor.fetchall()]
+        
+        # Get data from each table
+        export_data = {
+            'export_date': datetime.now().isoformat(),
+            'tables': {}
+        }
+        
+        for table in tables:
+            cursor.execute(f"SELECT * FROM {table}")
+            rows = cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
+            export_data['tables'][table] = {
+                'columns': columns,
+                'rows': []
+            }
+            
+            for row in rows:
+                row_dict = {}
+                for i, col in enumerate(columns):
+                    value = row[i]
+                    # Convert datetime objects to strings
+                    if isinstance(value, datetime):
+                        value = value.isoformat()
+                    row_dict[col] = value
+                export_data['tables'][table]['rows'].append(row_dict)
+        
+        conn.close()
+        
+        # Return as JSON download
+        response = Response(
+            json.dumps(export_data, indent=2, ensure_ascii=False),
+            mimetype='application/json',
+            headers={'Content-Disposition': f'attachment; filename=db_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'}
+        )
+        return response
+    except Exception as e:
+        logger.error(f"Error exporting database: {str(e)}", exc_info=True)
+        flash(f'Błąd podczas eksportu bazy danych: {str(e)}', 'error')
         return redirect(url_for('index'))
 
 

@@ -1,5 +1,6 @@
 """Database models for candidates, positions, and feedback."""
 import sqlite3
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -64,9 +65,10 @@ class Candidate:
             'last_name': self.last_name,
             'email': self.email,
             'position_id': self.position_id,
-            'status': self.status.value,
-            'stage': self.stage.value,
+            'status': self.status.value if isinstance(self.status, CandidateStatus) else str(self.status),
+            'stage': self.stage.value if isinstance(self.stage, RecruitmentStage) else str(self.stage),
             'cv_path': self.cv_path,
+            'consent_for_other_positions': self.consent_for_other_positions,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
@@ -105,10 +107,12 @@ class FeedbackEmail:
                  id: Optional[int] = None,
                  candidate_id: int = 0,
                  email_content: str = "",
+                 message_id: Optional[str] = None,
                  sent_at: Optional[datetime] = None):
         self.id = id
         self.candidate_id = candidate_id
         self.email_content = email_content
+        self.message_id = message_id
         self.sent_at = sent_at or datetime.now()
     
     def to_dict(self) -> Dict[str, Any]:
@@ -117,6 +121,7 @@ class FeedbackEmail:
             'id': self.id,
             'candidate_id': self.candidate_id,
             'email_content': self.email_content,
+            'message_id': self.message_id,
             'sent_at': self.sent_at.isoformat() if self.sent_at else None
         }
 
@@ -144,9 +149,79 @@ class HRNote:
             'id': self.id,
             'candidate_id': self.candidate_id,
             'notes': self.notes,
-            'stage': self.stage.value if isinstance(self.stage, RecruitmentStage) else self.stage,
+            'stage': self.stage.value if isinstance(self.stage, RecruitmentStage) else str(self.stage),
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'created_by': self.created_by
+        }
+
+
+class ValidationError:
+    """Validation error model."""
+    
+    def __init__(self,
+                 id: Optional[int] = None,
+                 candidate_id: int = 0,
+                 error_message: str = "",
+                 feedback_html_content: Optional[str] = None,
+                 validation_results: Optional[str] = None,
+                 model_responses_summary: Optional[str] = None,
+                 created_at: Optional[datetime] = None):
+        self.id = id
+        self.candidate_id = candidate_id
+        self.error_message = error_message
+        self.feedback_html_content = feedback_html_content
+        self.validation_results = validation_results
+        self.model_responses_summary = model_responses_summary
+        self.created_at = created_at or datetime.now()
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            'id': self.id,
+            'candidate_id': self.candidate_id,
+            'error_message': self.error_message,
+            'feedback_html_content': self.feedback_html_content,
+            'validation_results': self.validation_results,
+            'model_responses_summary': self.model_responses_summary,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class ModelResponse:
+    """Model response tracking model."""
+    
+    def __init__(self,
+                 id: Optional[int] = None,
+                 agent_type: str = "",
+                 model_name: str = "",
+                 candidate_id: Optional[int] = None,
+                 feedback_email_id: Optional[int] = None,
+                 input_data: Optional[str] = None,
+                 output_data: Optional[str] = None,
+                 metadata: Optional[str] = None,
+                 created_at: Optional[datetime] = None):
+        self.id = id
+        self.agent_type = agent_type
+        self.model_name = model_name
+        self.candidate_id = candidate_id
+        self.feedback_email_id = feedback_email_id
+        self.input_data = input_data
+        self.output_data = output_data
+        self.metadata = metadata
+        self.created_at = created_at or datetime.now()
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            'id': self.id,
+            'agent_type': self.agent_type,
+            'model_name': self.model_name,
+            'candidate_id': self.candidate_id,
+            'feedback_email_id': self.feedback_email_id,
+            'input_data': self.input_data,
+            'output_data': self.output_data,
+            'metadata': self.metadata,
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
 
@@ -154,7 +229,7 @@ def get_db_path() -> Path:
     """Get database file path."""
     db_dir = Path('data')
     db_dir.mkdir(exist_ok=True)
-    return db_dir / 'recruitment.db'
+    return db_dir / 'hr_database.db'
 
 
 def get_db() -> sqlite3.Connection:
@@ -213,10 +288,18 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             candidate_id INTEGER NOT NULL,
             email_content TEXT NOT NULL,
+            message_id TEXT,
             sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (candidate_id) REFERENCES candidates(id)
         )
     ''')
+    
+    # Add message_id column if it doesn't exist (for existing databases)
+    try:
+        cursor.execute('ALTER TABLE feedback_emails ADD COLUMN message_id TEXT')
+    except sqlite3.OperationalError:
+        # Column already exists, ignore
+        pass
     
     # Create hr_notes table
     cursor.execute('''
@@ -231,6 +314,37 @@ def init_db():
         )
     ''')
     
+    # Create model_responses table for tracking LLM responses
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS model_responses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_type TEXT NOT NULL,
+            model_name TEXT NOT NULL,
+            candidate_id INTEGER,
+            feedback_email_id INTEGER,
+            input_data TEXT,
+            output_data TEXT,
+            metadata TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (candidate_id) REFERENCES candidates(id),
+            FOREIGN KEY (feedback_email_id) REFERENCES feedback_emails(id)
+        )
+    ''')
+    
+    # Create validation_errors table for tracking validation failures
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS validation_errors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            candidate_id INTEGER NOT NULL,
+            error_message TEXT NOT NULL,
+            feedback_html_content TEXT,
+            validation_results TEXT,
+            model_responses_summary TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (candidate_id) REFERENCES candidates(id)
+        )
+    ''')
+    
     conn.commit()
     conn.close()
     logger.info(f"Database initialized at: {db_path}")
@@ -241,40 +355,32 @@ def get_all_candidates() -> List[Candidate]:
     conn = get_db()
     cursor = conn.cursor()
     
-    cursor.execute('''
-        SELECT c.*, p.title as position_title, p.company as position_company
-        FROM candidates c
-        LEFT JOIN positions p ON c.position_id = p.id
-        ORDER BY c.created_at DESC
-    ''')
-    
+    cursor.execute('SELECT * FROM candidates ORDER BY created_at DESC')
     rows = cursor.fetchall()
     conn.close()
     
     candidates = []
     for row in rows:
-        # Handle consent_for_other_positions (may not exist in older databases)
+        status = CandidateStatus(row['status']) if row['status'] else CandidateStatus.IN_PROGRESS
+        stage = RecruitmentStage(row['stage']) if row['stage'] else RecruitmentStage.INITIAL_SCREENING
+        
         consent_value = None
         if 'consent_for_other_positions' in row.keys() and row['consent_for_other_positions'] is not None:
             consent_value = bool(row['consent_for_other_positions'])
         
-        candidate = Candidate(
+        candidates.append(Candidate(
             id=row['id'],
             first_name=row['first_name'],
             last_name=row['last_name'],
             email=row['email'],
             position_id=row['position_id'],
-            status=CandidateStatus(row['status']),
-            stage=RecruitmentStage(row['stage']),
+            status=status,
+            stage=stage,
             cv_path=row['cv_path'],
             consent_for_other_positions=consent_value,
             created_at=datetime.fromisoformat(row['created_at']) if row['created_at'] else None,
             updated_at=datetime.fromisoformat(row['updated_at']) if row['updated_at'] else None
-        )
-        # Add position info as attributes
-        candidate.position_title = row['position_title'] if 'position_title' in row.keys() else ''
-        candidate.position_company = row['position_company'] if 'position_company' in row.keys() else ''
-        candidates.append(candidate)
+        ))
     
     return candidates
 
@@ -284,61 +390,57 @@ def get_candidate_by_id(candidate_id: int) -> Optional[Candidate]:
     conn = get_db()
     cursor = conn.cursor()
     
-    cursor.execute('''
-        SELECT c.*, p.title as position_title, p.company as position_company, p.description as position_description
-        FROM candidates c
-        LEFT JOIN positions p ON c.position_id = p.id
-        WHERE c.id = ?
-    ''', (candidate_id,))
-    
+    cursor.execute('SELECT * FROM candidates WHERE id = ?', (candidate_id,))
     row = cursor.fetchone()
     conn.close()
     
     if not row:
         return None
     
-    # Handle consent_for_other_positions (may not exist in older databases)
+    status = CandidateStatus(row['status']) if row['status'] else CandidateStatus.IN_PROGRESS
+    stage = RecruitmentStage(row['stage']) if row['stage'] else RecruitmentStage.INITIAL_SCREENING
+    
     consent_value = None
     if 'consent_for_other_positions' in row.keys() and row['consent_for_other_positions'] is not None:
         consent_value = bool(row['consent_for_other_positions'])
     
-    candidate = Candidate(
+    return Candidate(
         id=row['id'],
         first_name=row['first_name'],
         last_name=row['last_name'],
         email=row['email'],
         position_id=row['position_id'],
-        status=CandidateStatus(row['status']),
-        stage=RecruitmentStage(row['stage']),
+        status=status,
+        stage=stage,
         cv_path=row['cv_path'],
         consent_for_other_positions=consent_value,
         created_at=datetime.fromisoformat(row['created_at']) if row['created_at'] else None,
         updated_at=datetime.fromisoformat(row['updated_at']) if row['updated_at'] else None
     )
-    candidate.position_title = row['position_title'] if 'position_title' in row.keys() else ''
-    candidate.position_company = row['position_company'] if 'position_company' in row.keys() else ''
-    candidate.position_description = row['position_description'] if 'position_description' in row.keys() else ''
-    
-    return candidate
 
 
-def create_candidate(first_name: str, last_name: str, email: str, 
-                     position_id: Optional[int] = None,
-                     status: CandidateStatus = CandidateStatus.IN_PROGRESS,
-                     stage: RecruitmentStage = RecruitmentStage.INITIAL_SCREENING,
-                     cv_path: Optional[str] = None,
-                     consent_for_other_positions: Optional[bool] = None) -> Candidate:
+def create_candidate(
+    first_name: str,
+    last_name: str,
+    email: str,
+    position_id: Optional[int] = None,
+    status: CandidateStatus = CandidateStatus.IN_PROGRESS,
+    stage: RecruitmentStage = RecruitmentStage.INITIAL_SCREENING,
+    cv_path: Optional[str] = None,
+    consent_for_other_positions: Optional[bool] = None
+) -> Candidate:
     """Create a new candidate."""
     conn = get_db()
     cursor = conn.cursor()
     
-    # Convert boolean to integer for SQLite (1 = True, 0 = False, NULL = None)
-    consent_value = 1 if consent_for_other_positions is True else (0 if consent_for_other_positions is False else None)
+    consent_int = None
+    if consent_for_other_positions is not None:
+        consent_int = 1 if consent_for_other_positions else 0
     
     cursor.execute('''
         INSERT INTO candidates (first_name, last_name, email, position_id, status, stage, cv_path, consent_for_other_positions)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (first_name, last_name, email, position_id, status.value, stage.value, cv_path, consent_value))
+    ''', (first_name, last_name, email, position_id, status.value, stage.value, cv_path, consent_int))
     
     candidate_id = cursor.lastrowid
     conn.commit()
@@ -347,40 +449,57 @@ def create_candidate(first_name: str, last_name: str, email: str,
     return get_candidate_by_id(candidate_id)
 
 
-def update_candidate(candidate_id: int, **kwargs) -> Optional[Candidate]:
-    """Update candidate fields."""
+def update_candidate(
+    candidate_id: int,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
+    email: Optional[str] = None,
+    position_id: Optional[int] = None,
+    status: Optional[CandidateStatus] = None,
+    stage: Optional[RecruitmentStage] = None,
+    cv_path: Optional[str] = None,
+    consent_for_other_positions: Optional[bool] = None
+) -> Optional[Candidate]:
+    """Update candidate information."""
     conn = get_db()
     cursor = conn.cursor()
     
-    allowed_fields = ['first_name', 'last_name', 'email', 'position_id', 'status', 'stage', 'cv_path', 'consent_for_other_positions']
     updates = []
     values = []
     
-    for key, value in kwargs.items():
-        if key in allowed_fields:
-            if key == 'status' and isinstance(value, CandidateStatus):
-                value = value.value
-            elif key == 'stage' and isinstance(value, RecruitmentStage):
-                value = value.value
-            elif key == 'consent_for_other_positions':
-                # Convert boolean to integer for SQLite (1 = True, 0 = False, NULL = None)
-                value = 1 if value is True else (0 if value is False else None)
-            updates.append(f"{key} = ?")
-            values.append(value)
+    if first_name is not None:
+        updates.append('first_name = ?')
+        values.append(first_name)
+    if last_name is not None:
+        updates.append('last_name = ?')
+        values.append(last_name)
+    if email is not None:
+        updates.append('email = ?')
+        values.append(email)
+    if position_id is not None:
+        updates.append('position_id = ?')
+        values.append(position_id)
+    if status is not None:
+        updates.append('status = ?')
+        values.append(status.value if isinstance(status, CandidateStatus) else str(status))
+    if stage is not None:
+        updates.append('stage = ?')
+        values.append(stage.value if isinstance(stage, RecruitmentStage) else str(stage))
+    if cv_path is not None:
+        updates.append('cv_path = ?')
+        values.append(cv_path)
+    if consent_for_other_positions is not None:
+        updates.append('consent_for_other_positions = ?')
+        values.append(1 if consent_for_other_positions else 0)
     
     if not updates:
         conn.close()
         return get_candidate_by_id(candidate_id)
     
-    updates.append("updated_at = CURRENT_TIMESTAMP")
+    updates.append('updated_at = CURRENT_TIMESTAMP')
     values.append(candidate_id)
     
-    cursor.execute(f'''
-        UPDATE candidates
-        SET {', '.join(updates)}
-        WHERE id = ?
-    ''', values)
-    
+    cursor.execute(f'UPDATE candidates SET {", ".join(updates)} WHERE id = ?', values)
     conn.commit()
     conn.close()
     
@@ -409,6 +528,27 @@ def get_all_positions() -> List[Position]:
     return positions
 
 
+def get_position_by_id(position_id: int) -> Optional[Position]:
+    """Get position by ID."""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM positions WHERE id = ?', (position_id,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row:
+        return None
+    
+    return Position(
+        id=row['id'],
+        title=row['title'],
+        company=row['company'],
+        description=row['description'],
+        created_at=datetime.fromisoformat(row['created_at']) if row['created_at'] else None
+    )
+
+
 def create_position(title: str, company: str, description: Optional[str] = None) -> Position:
     """Create a new position."""
     conn = get_db()
@@ -423,30 +563,62 @@ def create_position(title: str, company: str, description: Optional[str] = None)
     conn.commit()
     conn.close()
     
+    return get_position_by_id(position_id)
+
+
+def update_position(position_id: int, title: Optional[str] = None, company: Optional[str] = None, description: Optional[str] = None) -> Optional[Position]:
+    """Update position information."""
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM positions WHERE id = ?', (position_id,))
-    row = cursor.fetchone()
+    
+    updates = []
+    values = []
+    
+    if title is not None:
+        updates.append('title = ?')
+        values.append(title)
+    if company is not None:
+        updates.append('company = ?')
+        values.append(company)
+    if description is not None:
+        updates.append('description = ?')
+        values.append(description)
+    
+    if not updates:
+        conn.close()
+        return get_position_by_id(position_id)
+    
+    values.append(position_id)
+    
+    cursor.execute(f'UPDATE positions SET {", ".join(updates)} WHERE id = ?', values)
+    conn.commit()
     conn.close()
     
-    return Position(
-        id=row['id'],
-        title=row['title'],
-        company=row['company'],
-        description=row['description'],
-        created_at=datetime.fromisoformat(row['created_at']) if row['created_at'] else None
-    )
+    return get_position_by_id(position_id)
 
 
-def save_feedback_email(candidate_id: int, email_content: str) -> FeedbackEmail:
+def delete_position(position_id: int) -> bool:
+    """Delete a position."""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('DELETE FROM positions WHERE id = ?', (position_id,))
+    conn.commit()
+    deleted = cursor.rowcount > 0
+    conn.close()
+    
+    return deleted
+
+
+def save_feedback_email(candidate_id: int, email_content: str, message_id: Optional[str] = None) -> FeedbackEmail:
     """Save feedback email to database."""
     conn = get_db()
     cursor = conn.cursor()
     
     cursor.execute('''
-        INSERT INTO feedback_emails (candidate_id, email_content)
-        VALUES (?, ?)
-    ''', (candidate_id, email_content))
+        INSERT INTO feedback_emails (candidate_id, email_content, message_id)
+        VALUES (?, ?, ?)
+    ''', (candidate_id, email_content, message_id))
     
     email_id = cursor.lastrowid
     conn.commit()
@@ -462,6 +634,7 @@ def save_feedback_email(candidate_id: int, email_content: str) -> FeedbackEmail:
         id=row['id'],
         candidate_id=row['candidate_id'],
         email_content=row['email_content'],
+        message_id=row['message_id'] if 'message_id' in row.keys() else None,
         sent_at=datetime.fromisoformat(row['sent_at']) if row['sent_at'] else None
     )
 
@@ -481,6 +654,7 @@ def get_feedback_emails_for_candidate(candidate_id: int) -> List[FeedbackEmail]:
             id=row['id'],
             candidate_id=row['candidate_id'],
             email_content=row['email_content'],
+            message_id=row['message_id'] if 'message_id' in row.keys() else None,
             sent_at=datetime.fromisoformat(row['sent_at']) if row['sent_at'] else None
         ))
     
@@ -502,10 +676,32 @@ def get_all_feedback_emails() -> List[FeedbackEmail]:
             id=row['id'],
             candidate_id=row['candidate_id'],
             email_content=row['email_content'],
+            message_id=row['message_id'] if 'message_id' in row.keys() else None,
             sent_at=datetime.fromisoformat(row['sent_at']) if row['sent_at'] else None
         ))
     
     return emails
+
+
+def get_feedback_email_by_message_id(message_id: str) -> Optional[FeedbackEmail]:
+    """Get feedback email by Message-ID."""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM feedback_emails WHERE message_id = ?', (message_id,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row:
+        return None
+    
+    return FeedbackEmail(
+        id=row['id'],
+        candidate_id=row['candidate_id'],
+        email_content=row['email_content'],
+        message_id=row['message_id'] if 'message_id' in row.keys() else None,
+        sent_at=datetime.fromisoformat(row['sent_at']) if row['sent_at'] else None
+    )
 
 
 def create_hr_note(candidate_id: int, notes: str, stage: RecruitmentStage, created_by: Optional[str] = None) -> HRNote:
@@ -579,68 +775,214 @@ def get_all_hr_notes() -> List[HRNote]:
     return notes
 
 
-def get_position_by_id(position_id: int) -> Optional[Position]:
-    """Get position by ID."""
+def save_model_response(
+    agent_type: str,
+    model_name: str,
+    input_data: Optional[Any] = None,
+    output_data: Optional[Any] = None,
+    candidate_id: Optional[int] = None,
+    feedback_email_id: Optional[int] = None,
+    metadata: Optional[Dict[str, Any]] = None
+) -> ModelResponse:
+    """
+    Save model response to database.
+    
+    Args:
+        agent_type: Type of agent (cv_parser, feedback_generator, validator, corrector)
+        model_name: Name of the model used
+        input_data: Input data (will be serialized to JSON if dict/list)
+        output_data: Output data (will be serialized to JSON if dict/list)
+        candidate_id: Optional candidate ID
+        feedback_email_id: Optional feedback email ID
+        metadata: Optional metadata dictionary (will be serialized to JSON)
+        
+    Returns:
+        ModelResponse object
+    """
     conn = get_db()
     cursor = conn.cursor()
     
-    cursor.execute('SELECT * FROM positions WHERE id = ?', (position_id,))
-    row = cursor.fetchone()
+    # Serialize input_data
+    input_str = None
+    if input_data is not None:
+        if isinstance(input_data, (dict, list)):
+            input_str = json.dumps(input_data, ensure_ascii=False, indent=2)
+        else:
+            input_str = str(input_data)
+    
+    # Serialize output_data
+    output_str = None
+    if output_data is not None:
+        if isinstance(output_data, (dict, list)):
+            output_str = json.dumps(output_data, ensure_ascii=False, indent=2)
+        else:
+            output_str = str(output_data)
+    
+    # Serialize metadata
+    metadata_str = None
+    if metadata:
+        metadata_str = json.dumps(metadata, ensure_ascii=False, indent=2)
+    
+    cursor.execute('''
+        INSERT INTO model_responses (agent_type, model_name, candidate_id, feedback_email_id, input_data, output_data, metadata)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (agent_type, model_name, candidate_id, feedback_email_id, input_str, output_str, metadata_str))
+    
+    response_id = cursor.lastrowid
+    conn.commit()
     conn.close()
     
-    if not row:
-        return None
-    
-    return Position(
-        id=row['id'],
-        title=row['title'],
-        company=row['company'],
-        description=row['description'],
-        created_at=datetime.fromisoformat(row['created_at']) if row['created_at'] else None
+    return ModelResponse(
+        id=response_id,
+        agent_type=agent_type,
+        model_name=model_name,
+        candidate_id=candidate_id,
+        feedback_email_id=feedback_email_id,
+        input_data=input_str,
+        output_data=output_str,
+        metadata=metadata_str,
+        created_at=datetime.now()
     )
 
 
-def update_position(position_id: int, **kwargs) -> Optional[Position]:
-    """Update position fields."""
+def get_model_responses_for_candidate(candidate_id: int) -> List[ModelResponse]:
+    """Get all model responses for a candidate."""
     conn = get_db()
     cursor = conn.cursor()
     
-    allowed_fields = ['title', 'company', 'description']
-    updates = []
-    values = []
-    
-    for key, value in kwargs.items():
-        if key in allowed_fields:
-            updates.append(f"{key} = ?")
-            values.append(value)
-    
-    if not updates:
-        conn.close()
-        return get_position_by_id(position_id)
-    
-    values.append(position_id)
-    
-    cursor.execute(f'''
-        UPDATE positions
-        SET {', '.join(updates)}
-        WHERE id = ?
-    ''', values)
-    
-    conn.commit()
+    cursor.execute('SELECT * FROM model_responses WHERE candidate_id = ? ORDER BY created_at DESC', (candidate_id,))
+    rows = cursor.fetchall()
     conn.close()
     
-    return get_position_by_id(position_id)
+    responses = []
+    for row in rows:
+        responses.append(ModelResponse(
+            id=row['id'],
+            agent_type=row['agent_type'],
+            model_name=row['model_name'],
+            candidate_id=row['candidate_id'],
+            feedback_email_id=row['feedback_email_id'] if 'feedback_email_id' in row.keys() else None,
+            input_data=row['input_data'],
+            output_data=row['output_data'],
+            metadata=row['metadata'] if 'metadata' in row.keys() else None,
+            created_at=datetime.fromisoformat(row['created_at']) if row['created_at'] else None
+        ))
+    
+    return responses
 
 
-def delete_position(position_id: int) -> bool:
-    """Delete a position."""
+def get_all_model_responses() -> List[ModelResponse]:
+    """Get all model responses from database."""
     conn = get_db()
     cursor = conn.cursor()
     
-    cursor.execute('DELETE FROM positions WHERE id = ?', (position_id,))
-    conn.commit()
-    deleted = cursor.rowcount > 0
+    cursor.execute('SELECT * FROM model_responses ORDER BY created_at DESC')
+    rows = cursor.fetchall()
     conn.close()
     
-    return deleted
+    responses = []
+    for row in rows:
+        responses.append(ModelResponse(
+            id=row['id'],
+            agent_type=row['agent_type'],
+            model_name=row['model_name'],
+            candidate_id=row['candidate_id'],
+            feedback_email_id=row['feedback_email_id'] if 'feedback_email_id' in row.keys() else None,
+            input_data=row['input_data'],
+            output_data=row['output_data'],
+            metadata=row['metadata'] if 'metadata' in row.keys() else None,
+            created_at=datetime.fromisoformat(row['created_at']) if row['created_at'] else None
+        ))
+    
+    return responses
 
+
+def save_validation_error(
+    candidate_id: int,
+    error_message: str,
+    feedback_html_content: Optional[str] = None,
+    validation_results: Optional[str] = None,
+    model_responses_summary: Optional[str] = None
+) -> ValidationError:
+    """
+    Save validation error to database.
+    
+    Args:
+        candidate_id: ID of the candidate
+        error_message: Error message describing the validation failure
+        feedback_html_content: HTML content of the rejected feedback
+        validation_results: JSON string of validation results
+        model_responses_summary: Summary of model responses
+        
+    Returns:
+        ValidationError object
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO validation_errors (candidate_id, error_message, feedback_html_content, validation_results, model_responses_summary)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (candidate_id, error_message, feedback_html_content, validation_results, model_responses_summary))
+    
+    error_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    
+    return ValidationError(
+        id=error_id,
+        candidate_id=candidate_id,
+        error_message=error_message,
+        feedback_html_content=feedback_html_content,
+        validation_results=validation_results,
+        model_responses_summary=model_responses_summary,
+        created_at=datetime.now()
+    )
+
+
+def get_validation_errors_for_candidate(candidate_id: int) -> List[ValidationError]:
+    """Get all validation errors for a candidate."""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM validation_errors WHERE candidate_id = ? ORDER BY created_at DESC', (candidate_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    
+    errors = []
+    for row in rows:
+        errors.append(ValidationError(
+            id=row['id'],
+            candidate_id=row['candidate_id'],
+            error_message=row['error_message'],
+            feedback_html_content=row['feedback_html_content'],
+            validation_results=row['validation_results'],
+            model_responses_summary=row['model_responses_summary'],
+            created_at=datetime.fromisoformat(row['created_at']) if row['created_at'] else None
+        ))
+    
+    return errors
+
+
+def get_all_validation_errors() -> List[ValidationError]:
+    """Get all validation errors from database."""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM validation_errors ORDER BY created_at DESC')
+    rows = cursor.fetchall()
+    conn.close()
+    
+    errors = []
+    for row in rows:
+        errors.append(ValidationError(
+            id=row['id'],
+            candidate_id=row['candidate_id'],
+            error_message=row['error_message'],
+            feedback_html_content=row['feedback_html_content'],
+            validation_results=row['validation_results'],
+            model_responses_summary=row['model_responses_summary'],
+            created_at=datetime.fromisoformat(row['created_at']) if row['created_at'] else None
+        ))
+    
+    return errors

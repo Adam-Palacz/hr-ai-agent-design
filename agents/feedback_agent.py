@@ -25,6 +25,12 @@ from models.job_models import JobOffer
 from prompts.feedback_generation_prompt import FEEDBACK_GENERATION_PROMPT
 from core.logger import logger
 
+# Import for tracking model responses
+try:
+    from database.models import save_model_response
+except ImportError:
+    save_model_response = None
+
 
 class FeedbackAgent:
     """Agent for generating personalized feedback to candidates."""
@@ -116,7 +122,8 @@ DO NOT return: {{"description": "...", "properties": {{...}}, "required": [...]}
         cv_data: CVData,
         hr_feedback: HRFeedback,
         job_offer: Optional[JobOffer] = None,
-        output_format: FeedbackFormat = FeedbackFormat.HTML
+        output_format: FeedbackFormat = FeedbackFormat.HTML,
+        candidate_id: Optional[int] = None
     ) -> CandidateFeedback:
         """
         Generate personalized feedback for a candidate.
@@ -162,15 +169,31 @@ DO NOT return: {{"description": "...", "properties": {{...}}, "required": [...]}
         # Run LLM chain using modern invoke method or fallback
         try:
             if use_lcel:
-                parsed_feedback = chain.invoke({
+                input_data = {
                     "cv_data": cv_data_str,
                     "hr_feedback": hr_feedback_str,
                     "job_offer": job_offer_str,
                     "candidate_name": candidate_name
-                })
+                }
+                parsed_feedback = chain.invoke(input_data)
                 # If html_content is missing, generate it from other fields
                 if not hasattr(parsed_feedback, 'html_content') or not parsed_feedback.html_content:
                     parsed_feedback = self._generate_html_fallback(parsed_feedback)
+                
+                # Track model response
+                if save_model_response:
+                    try:
+                        save_model_response(
+                            agent_type="feedback_generator",
+                            model_name=self.model_name,
+                            input_data=input_data,
+                            output_data=parsed_feedback.dict() if hasattr(parsed_feedback, 'dict') else str(parsed_feedback),
+                            candidate_id=candidate_id,
+                            metadata={"temperature": getattr(self.llm, 'temperature', None)}
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to save model response: {str(e)}")
+                
                 return parsed_feedback
             else:
                 # Fallback for older LangChain versions

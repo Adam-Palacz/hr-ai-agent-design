@@ -194,6 +194,8 @@
             <h1>🔐 Panel Administracyjny</h1>
             <div class="nav-links">
                 <a href="{{ url_for('index') }}" class="btn btn-secondary">← Powrót do listy</a>
+                <a href="{{ url_for('db_view') }}" class="btn" style="background: #10b981;">🗄️ Widok Bazy Danych</a>
+                <a href="{{ url_for('db_export') }}" class="btn" style="background: #059669;">💾 Eksportuj JSON</a>
             </div>
         </div>
 
@@ -339,6 +341,63 @@
             </div>
         </div>
 
+        <!-- HR Notes Table -->
+        <div class="section">
+            <div class="section-header">
+                <h2>📝 Notatki HR ({{ hr_notes|length }})</h2>
+            </div>
+            <div class="section-content">
+                {% if hr_notes %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Kandydat</th>
+                            <th>Etap</th>
+                            <th>Notatka</th>
+                            <th>Utworzono przez</th>
+                            <th>Data utworzenia</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for note in hr_notes %}
+                        <tr>
+                            <td>{{ note.id }}</td>
+                            <td>
+                                <a href="{{ url_for('candidate_detail', candidate_id=note.candidate_id) }}" class="link">
+                                    <strong>{{ note.candidate_name }}</strong>
+                                </a>
+                            </td>
+                            <td>
+                                {% set stage_display = {
+                                    'initial_screening': 'Pierwsza selekcja',
+                                    'hr_interview': 'Rozmowa HR',
+                                    'technical_assessment': 'Weryfikacja wiedzy',
+                                    'final_interview': 'Rozmowa końcowa',
+                                    'offer': 'Oferta'
+                                } %}
+                                {{ stage_display.get(note.stage_value, note.stage_value) }}
+                            </td>
+                            <td>
+                                <div style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    {{ note.notes[:200] if note.notes else 'Brak notatki' }}{% if note.notes and note.notes|length > 200 %}...{% endif %}
+                                </div>
+                            </td>
+                            <td>{{ note.created_by or 'N/A' }}</td>
+                            <td>{{ note.created_at.strftime('%Y-%m-%d %H:%M') if note.created_at else 'N/A' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-state-icon">📭</div>
+                    <p>Brak notatek HR w bazie danych</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
         <!-- Feedback Emails Table -->
         <div class="section">
             <div class="section-header">
@@ -352,6 +411,7 @@
                             <th>ID</th>
                             <th>Kandydat</th>
                             <th>Email kandydata</th>
+                            <th>Message-ID</th>
                             <th>Treść emaila</th>
                             <th>Wysłano</th>
                         </tr>
@@ -366,6 +426,13 @@
                                 </a>
                             </td>
                             <td>{{ email.candidate_email }}</td>
+                            <td>
+                                {% if email.message_id %}
+                                    <code style="font-size: 11px; background: #f8f9fa; padding: 4px 8px; border-radius: 4px;">{{ email.message_id }}</code>
+                                {% else %}
+                                    <em style="color: #6c757d;">Brak</em>
+                                {% endif %}
+                            </td>
                             <td>
                                 <div class="email-content">
                                     {{ email.email_content[:500] if email.email_content else 'Brak treści' }}{% if email.email_content and email.email_content|length > 500 %}...{% endif %}
@@ -384,7 +451,133 @@
                 {% endif %}
             </div>
         </div>
+
+        <!-- Model Responses Table -->
+        <div class="section">
+            <div class="section-header">
+                <h2>🤖 Odpowiedzi Modeli ({{ model_responses|length }})</h2>
+            </div>
+            <div class="section-content">
+                {% if model_responses %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Typ Agenta</th>
+                            <th>Model</th>
+                            <th>Kandydat</th>
+                            <th>Data</th>
+                            <th>Akcje</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for response in model_responses %}
+                        <tr>
+                            <td>{{ response.id }}</td>
+                            <td>
+                                {% set agent_display = {
+                                    'cv_parser': '📄 Parser CV',
+                                    'feedback_generator': '✉️ Generator Feedbacku',
+                                    'validator': '✅ Walidator',
+                                    'corrector': '🔧 Korektor'
+                                } %}
+                                {{ agent_display.get(response.agent_type, response.agent_type) }}
+                            </td>
+                            <td><code style="font-size: 11px;">{{ response.model_name }}</code></td>
+                            <td>
+                                {% if response.candidate_id %}
+                                    <a href="{{ url_for('candidate_detail', candidate_id=response.candidate_id) }}" class="link">
+                                        <strong>{{ response.candidate_name if response.candidate_name else 'ID: ' + response.candidate_id|string }}</strong>
+                                    </a>
+                                {% else %}
+                                    <em style="color: #6c757d;">Brak</em>
+                                {% endif %}
+                            </td>
+                            <td>{{ response.created_at.strftime('%Y-%m-%d %H:%M:%S') if response.created_at else 'N/A' }}</td>
+                            <td>
+                                <button onclick="showModelResponse({{ response.id }})" class="btn" style="background: #667eea; padding: 5px 10px; font-size: 12px;">Zobacz</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-state-icon">📭</div>
+                    <p>Brak odpowiedzi modeli w bazie danych</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
     </div>
+
+    <!-- Modal for Model Response Details -->
+    <div id="modelResponseModal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5);">
+        <div style="background: white; margin: 5% auto; padding: 30px; border-radius: 12px; max-width: 900px; max-height: 80vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>Szczegóły Odpowiedzi Modelu</h2>
+                <button onclick="closeModelResponse()" style="background: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">Zamknij</button>
+            </div>
+            <div id="modelResponseContent"></div>
+        </div>
+    </div>
+
+    <script>
+        const modelResponses = {
+            {% for response in model_responses %}
+            {{ response.id }}: {
+                agent_type: "{{ response.agent_type }}",
+                model_name: "{{ response.model_name }}",
+                candidate_id: {{ response.candidate_id if response.candidate_id else 'null' }},
+                input_data: {{ response.input_data|tojson if response.input_data else 'null' }},
+                output_data: {{ response.output_data|tojson if response.output_data else 'null' }},
+                metadata: {{ response.metadata|tojson if response.metadata else 'null' }},
+                created_at: "{{ response.created_at.strftime('%Y-%m-%d %H:%M:%S') if response.created_at else 'N/A' }}"
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        };
+
+        function showModelResponse(id) {
+            const response = modelResponses[id];
+            if (!response) return;
+
+            const content = document.getElementById('modelResponseContent');
+            content.innerHTML = `
+                <div style="margin-bottom: 20px;">
+                    <strong>Typ Agenta:</strong> ${response.agent_type}<br>
+                    <strong>Model:</strong> <code>${response.model_name}</code><br>
+                    <strong>Kandydat ID:</strong> ${response.candidate_id || 'Brak'}<br>
+                    <strong>Data:</strong> ${response.created_at}
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <h3>Input Data:</h3>
+                    <pre style="background: #f8f9fa; padding: 15px; border-radius: 6px; overflow-x: auto; max-height: 300px; overflow-y: auto;">${response.input_data ? JSON.stringify(JSON.parse(response.input_data), null, 2) : 'Brak danych'}</pre>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <h3>Output Data:</h3>
+                    <pre style="background: #f8f9fa; padding: 15px; border-radius: 6px; overflow-x: auto; max-height: 300px; overflow-y: auto;">${response.output_data ? JSON.stringify(JSON.parse(response.output_data), null, 2) : 'Brak danych'}</pre>
+                </div>
+                ${response.metadata ? `
+                <div>
+                    <h3>Metadata:</h3>
+                    <pre style="background: #f8f9fa; padding: 15px; border-radius: 6px; overflow-x: auto;">${JSON.stringify(JSON.parse(response.metadata), null, 2)}</pre>
+                </div>
+                ` : ''}
+            `;
+            document.getElementById('modelResponseModal').style.display = 'block';
+        }
+
+        function closeModelResponse() {
+            document.getElementById('modelResponseModal').style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('modelResponseModal');
+            if (event.target == modal) {
+                closeModelResponse();
+            }
+        }
+    </script>
 </body>
 </html>
 

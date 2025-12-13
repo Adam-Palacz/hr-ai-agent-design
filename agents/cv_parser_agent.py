@@ -24,6 +24,12 @@ from prompts.cv_parsing_prompt import CV_PARSING_PROMPT
 from utils.pdf_reader import extract_text_from_pdf
 from core.logger import logger
 
+# Import for tracking model responses
+try:
+    from database.models import save_model_response
+except ImportError:
+    save_model_response = None
+
 
 class CVParserAgent:
     """Agent for parsing CV information from PDF files."""
@@ -320,7 +326,7 @@ class CVParserAgent:
         
         return transformed
     
-    def parse_cv_from_pdf(self, pdf_path: str, verbose: bool = False) -> CVData:
+    def parse_cv_from_pdf(self, pdf_path: str, verbose: bool = False, candidate_id: Optional[int] = None) -> CVData:
         """
         Parse CV from PDF file and return structured data.
         Uses vision model as OCR if enabled.
@@ -407,9 +413,24 @@ class CVParserAgent:
             parsing_start = time.time()
             
             if self.use_lcel:
+                input_data = {"cv_text": cv_text[:1000] + "..." if len(cv_text) > 1000 else cv_text}  # Truncate for storage
                 parsed_data = self.chain.invoke({"cv_text": cv_text})
                 parsing_time = time.time() - parsing_start
                 logger.info(f"Step 2 completed: LLM parsing successful in {parsing_time:.2f}s")
+                
+                # Track model response
+                if save_model_response:
+                    try:
+                        save_model_response(
+                            agent_type="cv_parser",
+                            model_name=self.model_name,
+                            input_data=input_data,
+                            output_data=parsed_data.dict() if hasattr(parsed_data, 'dict') else str(parsed_data),
+                            candidate_id=candidate_id,
+                            metadata={"temperature": getattr(self.llm, 'temperature', None), "parsing_time": parsing_time}
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to save model response: {str(e)}")
                 
                 if verbose:
                     print(f"    ✅ Received response from LLM ({parsing_time:.2f}s)")
@@ -578,7 +599,7 @@ class CVParserAgent:
                     
                     raise Exception(error_msg)
     
-    def parse_cv_from_text(self, cv_text: str) -> CVData:
+    def parse_cv_from_text(self, cv_text: str, candidate_id: Optional[int] = None) -> CVData:
         """
         Parse CV from text content.
         
