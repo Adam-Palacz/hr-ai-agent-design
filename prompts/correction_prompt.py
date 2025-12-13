@@ -61,6 +61,13 @@ CRITICAL: The corrected email must be:
 - Free of offensive content
 - Supportive and constructive
 
+IMPORTANT OUTPUT REQUIREMENTS:
+- You MUST provide a list of corrections_made describing what you changed
+- The corrections_made field must be a list of strings, e.g., ["Fixed factual error about candidate experience", "Removed reference to technical skills not in CV", "Adjusted feedback to match job requirements"]
+- If you made multiple corrections, list each one separately
+- Be specific about what was corrected (e.g., "Removed incorrect mention of DevOps experience", "Updated feedback to focus on financial analysis skills")
+- The corrections_made list helps track what changes were made to address validation issues
+
 {format_instructions}
 """
 )

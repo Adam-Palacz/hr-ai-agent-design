@@ -112,7 +112,8 @@ class FeedbackValidatorAgent:
         cv_data: CVData,
         hr_feedback: HRFeedback,
         job_offer: Optional[JobOffer] = None,
-        candidate_id: Optional[int] = None
+        candidate_id: Optional[int] = None,
+        validation_number: Optional[int] = None
     ) -> ValidationResult:
         """
         Validate feedback email.
@@ -164,13 +165,17 @@ class FeedbackValidatorAgent:
                 # Track model response
                 if save_model_response:
                     try:
+                        metadata = {"temperature": getattr(self.llm, 'temperature', None)}
+                        if validation_number is not None:
+                            metadata["validation_number"] = validation_number
+                        
                         save_model_response(
                             agent_type="validator",
                             model_name=self.model_name,
                             input_data=input_data,
                             output_data=validation_result.dict() if hasattr(validation_result, 'dict') else str(validation_result),
                             candidate_id=candidate_id,
-                            metadata={"temperature": getattr(self.llm, 'temperature', None)}
+                            metadata=metadata
                         )
                     except Exception as e:
                         logger.warning(f"Failed to save model response: {str(e)}")
@@ -244,6 +249,31 @@ class FeedbackValidatorAgent:
                             # Fix common JSON issues
                             import re
                             
+                            # Fix markdown-style lists with "- " prefix in JSON arrays
+                            # This is a common issue where model returns: "key": [\n                - "value1"\n                - "value2"\n        ]
+                            # We need to convert it to: "key": ["value1", "value2"]
+                            
+                            # First, find all array definitions that might contain dashes
+                            # Pattern: "key": [ ... content with dashes ... ]
+                            def fix_array_with_dashes(match):
+                                key = match.group(1)
+                                array_content = match.group(2)
+                                # Extract all items with "- " prefix (handles both single and multiline)
+                                items = re.findall(r'-\s*"([^"]+)"', array_content)
+                                if items:
+                                    # Create proper JSON array
+                                    json_items = ', '.join([f'"{item}"' for item in items])
+                                    return f'"{key}": [{json_items}]'
+                                return match.group(0)
+                            
+                            # Fix arrays with markdown-style dashes (multiline format)
+                            # Matches: "key": [\n                - "item1"\n                - "item2"\n        ]
+                            json_str = re.sub(r'"(\w+)"\s*:\s*\[\s*\n\s*((?:-\s*"[^"]+"\s*\n\s*)+)\s*\]', fix_array_with_dashes, json_str, flags=re.MULTILINE)
+                            
+                            # Fix inline markdown lists: "key": [- "item1", - "item2"]
+                            # This handles cases where dashes are on the same line as commas
+                            json_str = re.sub(r'-\s*"([^"]+)"', r'"\1"', json_str)
+                            
                             # Clean up numbered list items in suggestions
                             json_str = re.sub(r'(\d+)\.\s*"', '"', json_str)
                             
@@ -278,17 +308,43 @@ class FeedbackValidatorAgent:
                                 is_approved_match = re.search(r'"is_approved"\s*:\s*(true|false)', json_str, re.IGNORECASE)
                                 reasoning_match = re.search(r'"reasoning"\s*:\s*"([^"]+)"', json_str, re.DOTALL)
                                 
-                                # Extract lists (issues_found, etc.) - simplified
-                                issues_match = re.search(r'"issues_found"\s*:\s*\[(.*?)\]', json_str, re.DOTALL)
+                                # Extract lists - handle both normal JSON and markdown-style
+                                def extract_list_items(key, json_str):
+                                    """Extract items from a list field, handling both JSON and markdown formats."""
+                                    # Try to find the array
+                                    pattern = rf'"{key}"\s*:\s*\[(.*?)\]'
+                                    match = re.search(pattern, json_str, re.DOTALL)
+                                    if not match:
+                                        return []
+                                    
+                                    content = match.group(1)
+                                    items = []
+                                    
+                                    # Try to extract quoted strings (normal JSON format)
+                                    quoted_items = re.findall(r'"([^"]+)"', content)
+                                    if quoted_items:
+                                        items.extend(quoted_items)
+                                    else:
+                                        # Try markdown format with "- "
+                                        dash_items = re.findall(r'-\s*"([^"]+)"', content)
+                                        if dash_items:
+                                            items.extend(dash_items)
+                                    
+                                    return items
+                                
+                                issues_found = extract_list_items('issues_found', json_str)
+                                ethical_concerns = extract_list_items('ethical_concerns', json_str)
+                                factual_errors = extract_list_items('factual_errors', json_str)
+                                suggestions = extract_list_items('suggestions', json_str)
                                 
                                 data = {
                                     "status": status_match.group(1) if status_match else "rejected",
                                     "is_approved": is_approved_match.group(1).lower() == "true" if is_approved_match else False,
                                     "reasoning": (reasoning_match.group(1) if reasoning_match else "Validation failed due to JSON parsing error").replace('\n', ' ').strip(),
-                                    "issues_found": [],
-                                    "ethical_concerns": [],
-                                    "factual_errors": [],
-                                    "suggestions": []
+                                    "issues_found": issues_found,
+                                    "ethical_concerns": ethical_concerns,
+                                    "factual_errors": factual_errors,
+                                    "suggestions": suggestions
                                 }
                             
                             # Clean suggestions if they exist

@@ -120,7 +120,8 @@ DO NOT return: {{"description": "...", "properties": {{...}}, "required": [...]}
         cv_data: CVData,
         hr_feedback: HRFeedback,
         job_offer: Optional[JobOffer] = None,
-        candidate_id: Optional[int] = None
+        candidate_id: Optional[int] = None,
+        correction_number: Optional[int] = None
     ) -> CorrectedFeedback:
         """
         Correct feedback email based on validation feedback.
@@ -182,13 +183,17 @@ DO NOT return: {{"description": "...", "properties": {{...}}, "required": [...]}
                 # Track model response
                 if save_model_response:
                     try:
+                        metadata = {"temperature": getattr(self.llm, 'temperature', None)}
+                        if correction_number is not None:
+                            metadata["correction_number"] = correction_number
+                        
                         save_model_response(
                             agent_type="corrector",
                             model_name=self.model_name,
                             input_data=input_data,
                             output_data=corrected_feedback.dict() if hasattr(corrected_feedback, 'dict') else str(corrected_feedback),
                             candidate_id=candidate_id,
-                            metadata={"temperature": getattr(self.llm, 'temperature', None)}
+                            metadata=metadata
                         )
                     except Exception as e:
                         logger.warning(f"Failed to save model response: {str(e)}")

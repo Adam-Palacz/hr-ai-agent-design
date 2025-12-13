@@ -123,7 +123,8 @@ DO NOT return: {{"description": "...", "properties": {{...}}, "required": [...]}
         hr_feedback: HRFeedback,
         job_offer: Optional[JobOffer] = None,
         output_format: FeedbackFormat = FeedbackFormat.HTML,
-        candidate_id: Optional[int] = None
+        candidate_id: Optional[int] = None,
+        recruitment_stage: Optional[str] = None
     ) -> CandidateFeedback:
         """
         Generate personalized feedback for a candidate.
@@ -153,10 +154,14 @@ DO NOT return: {{"description": "...", "properties": {{...}}, "required": [...]}
         # Format output format for prompt
         format_str = output_format.value if isinstance(output_format, FeedbackFormat) else str(output_format)
         
+        # Format recruitment stage for prompt
+        recruitment_stage_str = recruitment_stage or "Pierwsza selekcja"
+        
         # Build prompt with format instructions and output format
         prompt_with_format = self.prompt_template.partial(
             format_instructions=self.format_instructions,
-            output_format=format_str
+            output_format=format_str,
+            recruitment_stage=recruitment_stage_str
         )
         
         # Build chain dynamically
@@ -173,7 +178,8 @@ DO NOT return: {{"description": "...", "properties": {{...}}, "required": [...]}
                     "cv_data": cv_data_str,
                     "hr_feedback": hr_feedback_str,
                     "job_offer": job_offer_str,
-                    "candidate_name": candidate_name
+                    "candidate_name": candidate_name,
+                    "recruitment_stage": recruitment_stage_str
                 }
                 parsed_feedback = chain.invoke(input_data)
                 # If html_content is missing, generate it from other fields
@@ -201,7 +207,8 @@ DO NOT return: {{"description": "...", "properties": {{...}}, "required": [...]}
                     cv_data=cv_data_str,
                     hr_feedback=hr_feedback_str,
                     job_offer=job_offer_str,
-                    candidate_name=candidate_name
+                    candidate_name=candidate_name,
+                    recruitment_stage=recruitment_stage_str
                 )
                 response = self.llm.invoke(formatted_prompt)
                 result = response.content if hasattr(response, 'content') else str(response)
@@ -218,7 +225,8 @@ DO NOT return: {{"description": "...", "properties": {{...}}, "required": [...]}
                     cv_data=cv_data_str,
                     hr_feedback=hr_feedback_str,
                     job_offer=job_offer_str,
-                    candidate_name=candidate_name
+                    candidate_name=candidate_name,
+                    recruitment_stage=recruitment_stage_str
                 )
                 
                 # Get raw response from LLM

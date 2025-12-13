@@ -38,6 +38,7 @@ wheels/
 feedback_*.html
 feedback_*.txt
 example_cv.pdf
+*.db
 
 # OS
 .DS_Store

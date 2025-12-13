@@ -593,7 +593,7 @@ def process_feedback():
                     feedback_agent,
                     validator_agent=validator_agent,
                     correction_agent=correction_agent,
-                    max_validation_iterations=2
+                    max_validation_iterations=3
                 )
                 
                 # Parse CV (only for rejected candidates)
@@ -659,15 +659,25 @@ def process_feedback():
                     interviewer_name="HR Team"
                 )
                 
+                # Format recruitment stage for feedback generation
+                stage_display = {
+                    'initial_screening': 'Pierwsza selekcja',
+                    'hr_interview': 'Rozmowa HR',
+                    'technical_assessment': 'Weryfikacja wiedzy',
+                    'final_interview': 'Rozmowa końcowa',
+                    'offer': 'Oferta'
+                }.get(current_stage.value, current_stage.value)
+                
                 # Generate feedback
-                logger.info(f"[Background] Generating feedback for rejected candidate ID: {candidate_id}")
+                logger.info(f"[Background] Generating feedback for rejected candidate ID: {candidate_id} at stage: {stage_display}")
                 candidate_feedback, is_validated, validation_error_info = feedback_service.generate_feedback(
                     cv_data,
                     hr_feedback,
                     job_offer=job_offer,
                     output_format=FeedbackFormat.HTML,
                     save_to_file=False,
-                    candidate_id=candidate_id
+                    candidate_id=candidate_id,
+                    recruitment_stage=stage_display
                 )
                 
                 # Check if validation failed
@@ -688,10 +698,25 @@ def process_feedback():
                             'created_at': resp.created_at.isoformat() if resp.created_at else None
                         })
                     
+                    # Create detailed error message with validation and correction numbers
+                    total_validations = validation_error_info.get('total_validations', len(validation_error_info.get('validation_results', [])))
+                    total_corrections = validation_error_info.get('total_corrections', 0)
+                    last_validation = validation_error_info.get('last_validation_number', total_validations)
+                    last_correction = validation_error_info.get('last_correction_number', total_corrections)
+                    
+                    error_message = (
+                        f"Validation failed after {feedback_service.max_iterations} iterations. "
+                        f"Feedback was not approved by validator. "
+                        f"Total validations performed: {total_validations}, "
+                        f"Total corrections performed: {total_corrections}, "
+                        f"Last validation number: {last_validation}, "
+                        f"Last correction number: {last_correction}"
+                    )
+                    
                     # Save error to database
                     save_validation_error(
                         candidate_id=candidate_id,
-                        error_message=f"Validation failed after {feedback_service.max_iterations} iterations. Feedback was not approved by validator.",
+                        error_message=error_message,
                         feedback_html_content=candidate_feedback.html_content,
                         validation_results=json.dumps(validation_error_info.get('validation_results', []), ensure_ascii=False, indent=2),
                         model_responses_summary=json.dumps(model_responses_summary, ensure_ascii=False, indent=2)
@@ -784,12 +809,24 @@ def admin_panel():
             else:
                 note.stage_value = str(note.stage) if note.stage else 'unknown'
         
-        # Get candidate names for model responses
+        # Get candidate names and parse metadata for model responses
         for response in model_responses:
             if response.candidate_id and response.candidate_id in candidate_dict:
                 response.candidate_name = candidate_dict[response.candidate_id].full_name
             else:
                 response.candidate_name = "Nieznany kandydat"
+            
+            # Parse metadata to extract validation_number or correction_number
+            response.validation_number = None
+            response.correction_number = None
+            if response.metadata:
+                try:
+                    import json
+                    metadata = json.loads(response.metadata) if isinstance(response.metadata, str) else response.metadata
+                    response.validation_number = metadata.get('validation_number')
+                    response.correction_number = metadata.get('correction_number')
+                except (json.JSONDecodeError, TypeError):
+                    pass
         
         return render_template('admin.html', 
                             candidates=candidates,

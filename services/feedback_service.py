@@ -50,7 +50,8 @@ class FeedbackService:
         save_to_file: bool = False,
         output_dir: Optional[Path] = None,
         enable_validation: bool = True,
-        candidate_id: Optional[int] = None
+        candidate_id: Optional[int] = None,
+        recruitment_stage: Optional[str] = None
     ) -> tuple[CandidateFeedback, bool, Optional[Dict[str, Any]]]:
         """
         Generate personalized feedback for candidate with optional validation and correction.
@@ -76,7 +77,7 @@ class FeedbackService:
         
         try:
             # Step 1: Generate initial feedback
-            feedback = self.agent.generate_feedback(cv_data, hr_feedback, job_offer, output_format=output_format, candidate_id=candidate_id)
+            feedback = self.agent.generate_feedback(cv_data, hr_feedback, job_offer, output_format=output_format, candidate_id=candidate_id, recruitment_stage=recruitment_stage)
             logger.info(f"Successfully generated initial feedback for: {cv_data.full_name}")
             
             # Step 2: Validate and correct if validation is enabled
@@ -147,7 +148,8 @@ class FeedbackService:
                 cv_data,
                 hr_feedback,
                 job_offer,
-                candidate_id=candidate_id
+                candidate_id=candidate_id,
+                validation_number=iteration
             )
             
             # Store validation result
@@ -177,11 +179,17 @@ class FeedbackService:
                     f"Maximum validation iterations ({self.max_iterations}) reached for {cv_data.full_name}. "
                     f"Validation failed - feedback will not be sent."
                 )
-                # Return error info
+                # Return error info with summary
+                total_validations = len(all_validation_results)
+                total_corrections = sum(1 for r in all_validation_results if 'correction_number' in r)
                 error_info = {
                     'validation_results': all_validation_results,
                     'final_feedback_html': current_feedback.html_content,
-                    'max_iterations_reached': True
+                    'max_iterations_reached': True,
+                    'total_validations': total_validations,
+                    'total_corrections': total_corrections,
+                    'last_validation_number': total_validations,
+                    'last_correction_number': total_corrections
                 }
                 return current_feedback, False, error_info
             
@@ -193,28 +201,47 @@ class FeedbackService:
                     cv_data,
                     hr_feedback,
                     job_offer,
-                    candidate_id=candidate_id
+                    candidate_id=candidate_id,
+                    correction_number=iteration
                 )
                 
                 # Update current feedback with corrected version
                 current_feedback = CandidateFeedback(html_content=corrected.html_content)
+                
+                # Add correction number to the last validation result
+                if all_validation_results:
+                    all_validation_results[-1]['correction_number'] = iteration
+                    all_validation_results[-1]['corrections_made'] = corrected.corrections_made
+                
                 logger.info(
-                    f"Feedback corrected for {cv_data.full_name}. "
+                    f"Feedback corrected for {cv_data.full_name} (correction #{iteration}). "
                     f"Corrections made: {', '.join(corrected.corrections_made)}"
                 )
             except Exception as e:
                 logger.error(f"Failed to correct feedback in iteration {iteration}: {str(e)}")
                 # If correction fails, return error info
+                total_validations = len(all_validation_results)
+                total_corrections = sum(1 for r in all_validation_results if 'correction_number' in r)
                 error_info = {
                     'validation_results': all_validation_results,
                     'final_feedback_html': current_feedback.html_content,
                     'correction_failed': True,
-                    'correction_error': str(e)
+                    'correction_error': str(e),
+                    'total_validations': total_validations,
+                    'total_corrections': total_corrections,
+                    'last_validation_number': total_validations,
+                    'failed_correction_number': iteration
                 }
                 return current_feedback, False, error_info
         
         # Should not reach here, but return current feedback as fallback
-        return current_feedback, False, {'validation_results': all_validation_results}
+        total_validations = len(all_validation_results)
+        total_corrections = sum(1 for r in all_validation_results if 'correction_number' in r)
+        return current_feedback, False, {
+            'validation_results': all_validation_results,
+            'total_validations': total_validations,
+            'total_corrections': total_corrections
+        }
     
     # _save_feedback method removed - we only use HTML format now
     

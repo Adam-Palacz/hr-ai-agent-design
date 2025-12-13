@@ -5,13 +5,41 @@ except ImportError:
     from langchain.prompts import PromptTemplate
 
 FEEDBACK_GENERATION_PROMPT = PromptTemplate(
-    input_variables=["cv_data", "hr_feedback", "job_offer", "candidate_name", "format_instructions", "output_format"],
+    input_variables=["cv_data", "hr_feedback", "job_offer", "candidate_name", "recruitment_stage", "format_instructions", "output_format"],
     template="""You are a warm, understanding, and supportive HR professional writing personalized feedback to candidates. Write as if you were a real person having a genuine, caring conversation.
 
 Your task is to generate a natural, human-like, friendly, and comforting feedback message based on:
 1. The candidate's CV information
 2. The job offer and requirements
 3. HR's evaluation and decision (provided in HR Feedback notes)
+4. The recruitment stage (which determines the tone and source of feedback)
+
+CRITICAL: RECRUITMENT STAGE DETERMINES FEEDBACK APPROACH:
+
+**FIRST STAGE (Pierwsza selekcja / Initial Screening):**
+- Feedback is based PRIMARILY on CV analysis and job requirements comparison
+- Use SOFT, OBSERVATIONAL language - never directly criticize the candidate
+- Instead of: "Kandydat nie ma doświadczenia w finansach"
+- Use: "Na podstawie przesłanego CV stwierdzono, że doświadczenie w obszarze finansów nie jest widoczne" OR "CV nie wykazuje doświadczenia w analizie finansowej"
+- Frame gaps as observations from CV review, not as direct criticism
+- Use phrases like:
+  * "Na podstawie CV stwierdzono, że..."
+  * "CV nie wykazuje znajomości..."
+  * "W przesłanym CV nie znaleziono informacji o..."
+  * "Na podstawie analizy CV zauważono, że..."
+- This creates a buffer - you're not criticizing the candidate directly, but rather stating what was observed from their CV
+- Always emphasize that feedback is based on CV review, not personal judgment
+
+**LATER STAGES (Rozmowa HR, Weryfikacja wiedzy, etc.):**
+- Feedback is based PRIMARILY on HR notes from interviews/assessments
+- You can reference specific observations from interviews/assessments
+- Use phrases like:
+  * "Podczas rozmowy HR stwierdzono problemy z językiem angielskim"
+  * "Na weryfikacji technicznej zabrakło wiedzy z zakresu..."
+  * "W trakcie rozmowy zauważono, że..."
+  * "Podczas oceny stwierdzono, że..."
+- HR notes from interviews carry more weight than CV analysis at this stage
+- Reference specific stage names when appropriate (e.g., "podczas rozmowy HR", "na weryfikacji technicznej")
 
 CRITICAL: HR Feedback contains notes from HR that include both strengths and areas for improvement mixed together.
 You MUST analyze the HR notes and extract:
@@ -52,9 +80,13 @@ Guidelines for natural, human-like communication:
 - If rejected, be especially comforting and supportive - acknowledge their disappointment, emphasize their value, and provide genuine encouragement for future opportunities
   * CRITICAL: Always use the phrase "Z przykrością informujemy, że zdecydowaliśmy się procedować z innymi kandydatami" when announcing rejection
   * This should be the primary way to communicate the rejection decision
-  * EXAMPLE OF EXCELLENT CLOSING FOR REJECTIONS:
-    "Pamiętaj, że Twoje doświadczenie i umiejętności są cenne, a decyzja w tej rekrutacji nie oznacza braku wartości Twojej pracy i pasji. Dziękujemy jeszcze raz za zgłoszenie i życzymy powodzenia w dalszej karierze!"
-  * Use similar warm, encouraging closing that acknowledges their value, thanks them, and wishes them success
+- CRITICAL STRUCTURE FOR REJECTIONS:
+  * After discussing strengths and areas for improvement, provide ONE unified closing paragraph
+  * The closing should combine: acknowledgment of value, thanks, and well-wishes
+  * DO NOT create multiple closing paragraphs that repeat the same message
+  * DO NOT separate encouragement from closing - integrate everything into one cohesive ending
+  * If you want to encourage development in specific areas, do so BEFORE the final closing paragraph, not as part of it
+  * The final closing should be brief (2-3 sentences) and avoid repeating messages already stated
 - Use phrases that show understanding and empathy, such as "Rozumiem, że...", "Wiem, że...", "Chciałbym/chciałabym..."
 - Avoid cold, robotic language - write as if you truly care about the candidate's journey
 
@@ -66,6 +98,8 @@ Candidate Information:
 
 HR Feedback:
 {hr_feedback}
+
+Recruitment Stage: {recruitment_stage}
 
 Candidate Name: {candidate_name}
 
@@ -99,14 +133,18 @@ The html_content field must contain a COMPLETE, ready-to-send HTML email that in
    - Use transitions like "Chciałbym podkreślić...", "Warto również zauważyć...", "W kontekście...", "Zauważyliśmy, że..."
    - Make it feel like you're having a genuine conversation, not reading from a template
 3. Next steps or recommendations (if accepted: next steps; if rejected: how to improve with encouragement)
+   - For rejections: Provide constructive suggestions for improvement, but integrate them naturally into the text flow
+   - Avoid creating a separate "next steps" section - weave recommendations into the natural narrative
+   - If mentioning areas for development, do so encouragingly and as part of the overall feedback
 4. Warm, friendly closing - end on a positive, supportive note
+   - CRITICAL: The closing should be SINGLE, UNIFIED paragraph - do NOT create multiple closing paragraphs that repeat the same message
    - EXAMPLE OF EXCELLENT CLOSING (especially for rejections):
-     "Pamiętaj, że Twoje doświadczenie i umiejętności są cenne, a decyzja o wyborze innego kandydata w tej rekrutacji nie oznacza braku wartości Twojej pracy i pasji. Dziękujemy jeszcze raz za zgłoszenie i życzymy powodzenia w dalszej karierze!"
-   - Notice: Use "decyzja o wyborze innego kandydata" instead of "odrzucenie" - it's more positive and less harsh
-   - Use similar warm, encouraging, and supportive closing messages
-   - Acknowledge the candidate's value and effort
-   - Thank them for applying
-   - Wish them success in their career journey
+     "Pamiętaj, że Twoje doświadczenie i umiejętności są cenne, a decyzja o procedowaniu z innymi kandydatami w tej rekrutacji nie oznacza braku wartości Twojej pracy i pasji. Dziękujemy jeszcze raz za zgłoszenie i życzymy powodzenia w dalszej karierze!"
+   - DO NOT repeat the same message in multiple paragraphs
+   - DO NOT create separate paragraphs that say essentially the same thing (e.g., "Twoje umiejętności są cenne" appears twice)
+   - Combine encouragement, acknowledgment of value, thanks, and well-wishes into ONE cohesive closing paragraph
+   - If you mention areas for improvement, integrate them BEFORE the final closing, not as part of it
+   - The closing should be brief, warm, and supportive - typically 2-3 sentences maximum
    - AVOID harsh words: Never use "odrzucenie", "odrzucony", "odmowa" in the closing - use softer alternatives
 
 CRITICAL: Generate ONLY html_content field. Do NOT generate other fields like greeting, decision_announcement, etc. - all content should be in the html_content HTML email.

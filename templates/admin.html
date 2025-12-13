@@ -466,6 +466,7 @@
                             <th>Typ Agenta</th>
                             <th>Model</th>
                             <th>Kandydat</th>
+                            <th>Iteracja</th>
                             <th>Data</th>
                             <th>Akcje</th>
                         </tr>
@@ -491,6 +492,19 @@
                                     </a>
                                 {% else %}
                                     <em style="color: #6c757d;">Brak</em>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if response.validation_number is not none %}
+                                    <span style="background: #667eea; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">
+                                        Walidacja #{{ response.validation_number }}
+                                    </span>
+                                {% elif response.correction_number is not none %}
+                                    <span style="background: #f59e0b; color: white; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">
+                                        Korekta #{{ response.correction_number }}
+                                    </span>
+                                {% else %}
+                                    <em style="color: #6c757d;">-</em>
                                 {% endif %}
                             </td>
                             <td>{{ response.created_at.strftime('%Y-%m-%d %H:%M:%S') if response.created_at else 'N/A' }}</td>
