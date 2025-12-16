@@ -385,6 +385,40 @@ def get_all_candidates() -> List[Candidate]:
     return candidates
 
 
+def get_candidate_by_email(email: str) -> Optional[Candidate]:
+    """Get candidate by email address."""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM candidates WHERE email = ?', (email,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row:
+        return None
+    
+    status = CandidateStatus(row['status']) if row['status'] else CandidateStatus.IN_PROGRESS
+    stage = RecruitmentStage(row['stage']) if row['stage'] else RecruitmentStage.INITIAL_SCREENING
+    
+    consent_value = None
+    if 'consent_for_other_positions' in row.keys() and row['consent_for_other_positions'] is not None:
+        consent_value = bool(row['consent_for_other_positions'])
+    
+    return Candidate(
+        id=row['id'],
+        first_name=row['first_name'],
+        last_name=row['last_name'],
+        email=row['email'],
+        position_id=row['position_id'],
+        status=status,
+        stage=stage,
+        cv_path=row['cv_path'],
+        consent_for_other_positions=consent_value,
+        created_at=datetime.fromisoformat(row['created_at']) if row['created_at'] else None,
+        updated_at=datetime.fromisoformat(row['updated_at']) if row['updated_at'] else None
+    )
+
+
 def get_candidate_by_id(candidate_id: int) -> Optional[Candidate]:
     """Get candidate by ID."""
     conn = get_db()

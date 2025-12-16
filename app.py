@@ -58,22 +58,50 @@ ALLOWED_EXTENSIONS = {'pdf'}
 app.config['UPLOAD_FOLDER'] = str(UPLOAD_FOLDER)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
-# Gmail SMTP configuration (reload after dotenv)
-GMAIL_USERNAME = os.getenv('GMAIL_USERNAME', '')
-GMAIL_PASSWORD = os.getenv('GMAIL_PASSWORD', '')  # App password for Gmail
-GMAIL_CONFIG_PATH = os.getenv('GMAIL_CONFIG_PATH', 'config/job_config_example.yaml')
-
-# Check Gmail configuration on startup
-if not GMAIL_USERNAME or not GMAIL_PASSWORD:
+# Check email configuration on startup
+if not settings.email_username or not settings.email_password:
     logger.warning(
-        "Gmail credentials not configured. Email sending will be disabled.\n"
+        "Email credentials not configured. Email sending will be disabled.\n"
         "To enable email sending, add to .env file:\n"
-        "  GMAIL_USERNAME=your-email@gmail.com\n"
-        "  GMAIL_PASSWORD=your-app-password\n"
-        "Get app password from: https://myaccount.google.com/apppasswords"
+        "  EMAIL_USERNAME=your-email@domain.com\n"
+        "  EMAIL_PASSWORD=your-password\n"
+        "  SMTP_HOST=smtp.zoho.eu  # or smtp.zoho.com, smtp.gmail.com\n"
+        "  SMTP_PORT=587  # 587 for TLS, 465 for SSL\n"
+        "  IMAP_HOST=imap.zoho.eu  # or imap.zoho.com, imap.gmail.com\n"
+        "  IMAP_PORT=993  # 993 for SSL\n"
+        "For Gmail: Use 'App Password' from https://myaccount.google.com/apppasswords\n"
+        "For Zoho: Use your regular password or app-specific password"
     )
 else:
-    logger.info(f"Gmail configured for: {GMAIL_USERNAME}")
+    logger.info(f"Email configured for: {settings.email_username} (SMTP: {settings.smtp_host}:{settings.smtp_port}, IMAP: {settings.imap_host}:{settings.imap_port})")
+
+# Initialize email monitor if configured and enabled
+email_monitor = None
+if settings.email_monitor_enabled and settings.email_username and settings.email_password and settings.iod_email and settings.hr_email:
+    try:
+        from services.email_monitor import EmailMonitor
+        email_monitor = EmailMonitor(
+            email_username=settings.email_username,
+            email_password=settings.email_password,
+            imap_host=settings.imap_host,
+            imap_port=settings.imap_port,
+            smtp_host=settings.smtp_host,
+            smtp_port=settings.smtp_port,
+            iod_email=settings.iod_email,
+            hr_email=settings.hr_email,
+            check_interval=settings.email_check_interval
+        )
+        email_monitor.start()
+        logger.info(f"Email monitor started (IOD: {settings.iod_email}, HR: {settings.hr_email}, interval: {settings.email_check_interval}s)")
+    except Exception as e:
+        logger.warning(f"Failed to start email monitor: {str(e)}")
+elif settings.email_monitor_enabled and settings.email_username and settings.email_password:
+    logger.warning(
+        "Email monitoring disabled. To enable, add to .env file:\n"
+        "  IOD_EMAIL=iod@company.com\n"
+        "  HR_EMAIL=hr@company.com\n"
+        "  EMAIL_CHECK_INTERVAL=60  # optional, default 60 seconds"
+    )
 
 
 def allowed_file(filename):
@@ -116,8 +144,8 @@ def send_email_gmail(to_email: str, subject: str, html_content: str, message_id:
     Returns:
         Tuple of (success: bool, message_id: Optional[str])
     """
-    if not GMAIL_USERNAME or not GMAIL_PASSWORD:
-        logger.error("Gmail credentials not configured. Set GMAIL_USERNAME and GMAIL_PASSWORD in .env")
+    if not settings.email_username or not settings.email_password:
+        logger.error("Email credentials not configured. Set EMAIL_USERNAME and EMAIL_PASSWORD in .env")
         return False, None
     
     try:
@@ -126,13 +154,13 @@ def send_email_gmail(to_email: str, subject: str, html_content: str, message_id:
         
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
-        msg['From'] = GMAIL_USERNAME
+        msg['From'] = settings.email_username
         msg['To'] = to_email
         
         # Generate Message-ID if not provided
         if not message_id:
             # Generate a unique Message-ID following RFC 5322 format
-            domain = GMAIL_USERNAME.split('@')[1] if '@' in GMAIL_USERNAME else socket.getfqdn()
+            domain = settings.email_username.split('@')[1] if '@' in settings.email_username else socket.getfqdn()
             message_id = f"<{uuid.uuid4().hex}@{domain}>"
         
         msg['Message-ID'] = message_id
@@ -141,11 +169,19 @@ def send_email_gmail(to_email: str, subject: str, html_content: str, message_id:
         html_part = MIMEText(html_content, 'html', 'utf-8')
         msg.attach(html_part)
         
-        # Send email via Gmail SMTP
-        with smtplib.SMTP('smtp.gmail.com', 587) as server:
-            server.starttls()
-            server.login(GMAIL_USERNAME, GMAIL_PASSWORD)
-            server.send_message(msg)
+        # Send email via SMTP (using settings)
+        if settings.smtp_port == 465:
+            # Use SSL for port 465
+            with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port) as server:
+                server.login(settings.email_username, settings.email_password)
+                server.send_message(msg)
+        else:
+            # Use TLS for port 587
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
+                if settings.smtp_use_tls:
+                    server.starttls()
+                server.login(settings.email_username, settings.email_password)
+                server.send_message(msg)
         
         logger.info(f"Email sent successfully to {to_email} via Gmail with Message-ID: {message_id}")
         return True, message_id
@@ -551,7 +587,7 @@ def process_feedback():
                 logger.info(f"[Background] Initializing agents for feedback generation for candidate {candidate_id}...")
                 cv_parser = CVParserAgent(
                     model_name=settings.openai_model,
-                    vision_model_name=settings.openai_vision_model,
+                    vision_model_name=settings.azure_openai_vision_deployment,
                     use_ocr=settings.use_ocr,
                     temperature=settings.openai_temperature,
                     api_key=settings.api_key,
@@ -737,8 +773,8 @@ def process_feedback():
                 feedback_email_id = None
                 if candidate_email:
                     subject = f"Odpowiedź na aplikację - {job_offer.title if job_offer else 'Stanowisko'}"
-                    if not GMAIL_USERNAME or not GMAIL_PASSWORD:
-                        logger.warning(f"[Background] Email not sent - Gmail credentials not configured for candidate {candidate_id}")
+                    if not settings.email_username or not settings.email_password:
+                        logger.warning(f"[Background] Email not sent - Email credentials not configured for candidate {candidate_id}")
                     else:
                         success, message_id = send_email_gmail(candidate_email, subject, html_content)
                         if success:

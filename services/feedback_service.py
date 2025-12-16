@@ -100,9 +100,9 @@ class FeedbackService:
             
             if save_to_file:
                 # Save HTML feedback (only format we support now)
-                if feedback.html_content:
-                    html_path = self._save_feedback_html(feedback, cv_data, output_dir)
-                    logger.info(f"HTML feedback saved to: {html_path}")
+                    if feedback.html_content:
+                        html_path = self._save_feedback_html(feedback, cv_data, output_dir)
+                        logger.info(f"HTML feedback saved to: {html_path}")
             
             return feedback
             

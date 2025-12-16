@@ -32,3 +32,6 @@ pyyaml>=6.0.0
 Flask>=3.0.0
 Werkzeug>=3.0.0
 
+# Email processing
+# imaplib is part of Python standard library, no additional package needed
+

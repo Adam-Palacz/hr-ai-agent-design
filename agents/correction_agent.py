@@ -1,23 +1,6 @@
-"""LangChain agent for correcting candidate feedback emails based on validation feedback."""
-import json
+"""Azure OpenAI agent for correcting candidate feedback emails (no LangChain)."""
+
 from typing import Optional
-
-try:
-    from langchain_openai import ChatOpenAI
-except ImportError:
-    try:
-        from langchain.chat_models import ChatOpenAI
-    except ImportError:
-        from langchain_community.chat_models import ChatOpenAI
-
-# Try modern LangChain imports first, fallback to legacy
-try:
-    from langchain_core.output_parsers import PydanticOutputParser
-except ImportError:
-    try:
-        from langchain.output_parsers import PydanticOutputParser
-    except ImportError:
-        from langchain_core.output_parsers.pydantic import PydanticOutputParser
 
 from models.cv_models import CVData
 from models.feedback_models import HRFeedback
@@ -25,15 +8,11 @@ from models.job_models import JobOffer
 from models.validation_models import ValidationResult, CorrectedFeedback
 from prompts.correction_prompt import CORRECTION_PROMPT
 from core.logger import logger
-
-# Import for tracking model responses
-try:
-    from database.models import save_model_response
-except ImportError:
-    save_model_response = None
+from agents.base_agent import BaseAgent
+from utils.json_parser import parse_json_safe
 
 
-class FeedbackCorrectionAgent:
+class FeedbackCorrectionAgent(BaseAgent):
     """Agent for correcting candidate feedback emails based on validation feedback."""
     
     def __init__(
@@ -45,73 +24,25 @@ class FeedbackCorrectionAgent:
         max_retries: int = 2
     ):
         """
-        Initialize Feedback Correction Agent.
-        
-        Args:
-            model_name: Name of the LLM model to use (default: gpt-4o)
-            temperature: Temperature for LLM generation (default: 0.3 for balanced creativity)
-            api_key: OpenAI API key (if not set, uses environment variable)
-            timeout: Request timeout in seconds (default: 120)
-            max_retries: Maximum number of retries on failure (default: 2)
+        Initialize Feedback Correction Agent using Azure OpenAI SDK (no LangChain).
         """
-        self.model_name = model_name
-        
-        # Handle special temperature requirements for gpt-5 models
-        model_lower = model_name.lower()
-        if model_lower.startswith("gpt-5") and "chat" not in model_lower:
-            if temperature != 1.0 and temperature is not None:
-                logger.warning(
-                    f"Model {model_name} only supports temperature=1.0 or unset. "
-                    f"Adjusting temperature from {temperature} to 1.0"
-                )
-                temperature = 1.0
-        
-        # Initialize ChatOpenAI
-        try:
-            llm_kwargs = {
-                "model": model_name,
-                "temperature": temperature,
-                "timeout": timeout,
-                "max_retries": max_retries,
-            }
-            if api_key:
-                llm_kwargs["openai_api_key"] = api_key
-            self.llm = ChatOpenAI(**llm_kwargs)
-        except TypeError:
-            # Fallback for older LangChain versions
-            llm_kwargs = {
-                "model_name": model_name,
-                "temperature": temperature,
-            }
-            if api_key:
-                llm_kwargs["openai_api_key"] = api_key
-            try:
-                llm_kwargs["timeout"] = timeout
-                llm_kwargs["max_retries"] = max_retries
-            except TypeError:
-                logger.warning("Older LangChain version detected - timeout and max_retries may not be supported")
-            self.llm = ChatOpenAI(**llm_kwargs)
-        
-        self.output_parser = PydanticOutputParser(pydantic_object=CorrectedFeedback)
-        
-        # Get format instructions
-        base_instructions = self.output_parser.get_format_instructions()
-        # Add explicit instruction to return actual data, not schema
-        self.format_instructions = f"""{base_instructions}
+        super().__init__(model_name, temperature, api_key, timeout, max_retries)
 
-CRITICAL: Return ACTUAL DATA VALUES, not a schema description. 
-The response must be a JSON object with the html_content field containing the actual corrected HTML email content.
-Example: {{"html_content": "<!DOCTYPE html>\\n<html>...</html>", "corrections_made": ["Fixed factual error", "Removed discriminatory language"]}}
-DO NOT return: {{"description": "...", "properties": {{...}}, "required": [...]}}"""
-        
+        # Static format instructions describing CorrectedFeedback schema
+        self.format_instructions = (
+            "Return ONLY a single JSON object with the following structure:\n"
+            "{\n"
+            '  "html_content": "<!DOCTYPE html>\\n<html>...corrected email HTML...</html>",\n'
+            '  "corrections_made": ["correction 1", "correction 2"],\n'
+            '  "explanation": "short explanation of changes"\n'
+            "}\n\n"
+            "- corrections_made must be a list of strings, each describing one change.\n"
+            "- Do NOT return a JSON schema or description.\n"
+            "- Do NOT wrap the JSON in markdown code fences."
+        )
+
         # Store prompt template
         self.prompt_template = CORRECTION_PROMPT
-        
-        # Try to use modern LCEL approach
-        try:
-            self.use_lcel = True
-        except (TypeError, AttributeError):
-            self.use_lcel = False
     
     def correct_feedback(
         self,
@@ -124,17 +55,7 @@ DO NOT return: {{"description": "...", "properties": {{...}}, "required": [...]}
         correction_number: Optional[int] = None
     ) -> CorrectedFeedback:
         """
-        Correct feedback email based on validation feedback.
-        
-        Args:
-            original_html: Original HTML content that needs correction
-            validation_result: ValidationResult with issues and reasoning
-            cv_data: Parsed CV data for fact-checking
-            hr_feedback: HR feedback for reference
-            job_offer: Optional job offer information
-            
-        Returns:
-            CorrectedFeedback object with corrected HTML and list of corrections made
+        Correct feedback email based on validation feedback using Azure OpenAI.
         """
         logger.info(f"Correcting feedback email for: {cv_data.full_name}")
         
@@ -153,21 +74,48 @@ DO NOT return: {{"description": "...", "properties": {{...}}, "required": [...]}
         factual_str = "\n".join([f"- {error}" for error in validation_result.factual_errors]) if validation_result.factual_errors else "None"
         
         # Build prompt with format instructions
-        prompt_with_format = self.prompt_template.partial(
-            format_instructions=self.format_instructions
+        prompt_text = self.prompt_template.format(
+            original_html=original_html,
+            validation_reasoning=validation_result.reasoning,
+            issues_found=issues_str,
+            ethical_concerns=ethical_str,
+            factual_errors=factual_str,
+            cv_data=cv_data_str,
+            hr_feedback=hr_feedback_str,
+            job_offer=job_offer_str,
+            format_instructions=self.format_instructions,
         )
-        
-        # Build chain
-        try:
-            chain = prompt_with_format | self.llm | self.output_parser
-            use_lcel = True
-        except (TypeError, AttributeError):
-            use_lcel = False
-        
+
         # Run correction
         try:
-            if use_lcel:
-                input_data = {
+            logger.info(f"Correcting feedback email for: {cv_data.full_name}")
+
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a careful JSON-producing correction assistant. "
+                            "You must follow the format_instructions exactly."
+                        ),
+                    },
+                    {"role": "user", "content": prompt_text},
+                ],
+                max_completion_tokens=3000,
+                temperature=self.temperature,
+            )
+
+            raw_text = response.choices[0].message.content
+
+            # Track model response
+            metadata = {"temperature": self.temperature}
+            if correction_number is not None:
+                metadata["correction_number"] = correction_number
+
+            self._save_model_response(
+                agent_type="corrector",
+                input_data={
                     "original_html": original_html,
                     "validation_reasoning": validation_result.reasoning,
                     "issues_found": issues_str,
@@ -175,125 +123,84 @@ DO NOT return: {{"description": "...", "properties": {{...}}, "required": [...]}
                     "factual_errors": factual_str,
                     "cv_data": cv_data_str,
                     "hr_feedback": hr_feedback_str,
-                    "job_offer": job_offer_str
-                }
-                corrected_feedback = chain.invoke(input_data)
-                logger.info(f"Correction completed for {cv_data.full_name}. Corrections made: {len(corrected_feedback.corrections_made)}")
-                
-                # Track model response
-                if save_model_response:
-                    try:
-                        metadata = {"temperature": getattr(self.llm, 'temperature', None)}
-                        if correction_number is not None:
-                            metadata["correction_number"] = correction_number
-                        
-                        save_model_response(
-                            agent_type="corrector",
-                            model_name=self.model_name,
-                            input_data=input_data,
-                            output_data=corrected_feedback.dict() if hasattr(corrected_feedback, 'dict') else str(corrected_feedback),
-                            candidate_id=candidate_id,
-                            metadata=metadata
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to save model response: {str(e)}")
-                
-                return corrected_feedback
-            else:
-                # Fallback for older LangChain versions
-                formatted_prompt = prompt_with_format.format(
-                    original_html=original_html,
-                    validation_reasoning=validation_result.reasoning,
-                    issues_found=issues_str,
-                    ethical_concerns=ethical_str,
-                    factual_errors=factual_str,
-                    cv_data=cv_data_str,
-                    hr_feedback=hr_feedback_str,
-                    job_offer=job_offer_str
-                )
-                response = self.llm.invoke(formatted_prompt)
-                result = response.content if hasattr(response, 'content') else str(response)
-                
-                # Try to extract JSON from the response
-                if "```json" in result:
-                    json_start = result.find("```json") + 7
-                    json_end = result.find("```", json_start)
-                    result = result[json_start:json_end].strip()
-                elif "```" in result:
-                    json_start = result.find("```") + 3
-                    json_end = result.find("```", json_start)
-                    result = result[json_start:json_end].strip()
-                
-                corrected_feedback = self.output_parser.parse(result)
-                logger.info(f"Correction completed for {cv_data.full_name}. Corrections made: {len(corrected_feedback.corrections_made)}")
-                return corrected_feedback
+                    "job_offer": job_offer_str,
+                },
+                output_data=raw_text,
+                candidate_id=candidate_id,
+                metadata=metadata,
+            )
+
+            corrected_feedback = self._parse_correction_from_text(raw_text)
+            logger.info(
+                f"Correction completed for {cv_data.full_name}. "
+                f"Corrections made: {len(corrected_feedback.corrections_made)}"
+            )
+            return corrected_feedback
         except Exception as e:
             error_msg = f"Failed to correct feedback: {str(e)}"
             logger.error(error_msg, exc_info=True)
             raise Exception(error_msg) from e
+
+    def _parse_correction_from_text(self, text: str) -> CorrectedFeedback:
+        """
+        Parse CorrectedFeedback from raw model text, handling common JSON issues.
+        """
+        if not text:
+            raise ValueError("Empty response from model")
+
+        original_text = text
+
+        # Try to parse JSON
+        try:
+            data = parse_json_safe(text, fallback_to_extraction=True)
+        except ValueError:
+            # No JSON at all – treat as plain HTML correction without metadata
+            logger.warning("No JSON detected in correction output, using raw text as HTML.")
+            return CorrectedFeedback(
+                html_content=self._wrap_html_if_needed(original_text),
+                corrections_made=["Used raw model output as HTML (no structured JSON)"],
+                explanation="Model did not return valid JSON; raw output was wrapped as HTML.",
+            )
+
+        html = data.get("html_content")
+        if not html or not isinstance(html, str):
+            raise ValueError("html_content field is required and must be a non-empty string")
+
+        corrections = data.get("corrections_made") or []
+        explanation = data.get("explanation") or ""
+
+        # Ensure corrections_made is a list of strings
+        if not isinstance(corrections, list):
+            corrections = [str(corrections)]
+        else:
+            corrections = [str(c) for c in corrections]
+
+        return CorrectedFeedback(
+            html_content=html,
+            corrections_made=corrections,
+            explanation=str(explanation),
+        )
+
+    @staticmethod
+    def _wrap_html_if_needed(content: str) -> str:
+        """If content is not full HTML, wrap it in a minimal HTML template."""
+        lower = content.lower()
+        if "<html" in lower or "<body" in lower:
+            return content
+
+        return (
+            "<!DOCTYPE html>\n"
+            '<html lang="pl">\n'
+            "<head>\n"
+            '    <meta charset="UTF-8">\n'
+            '    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
+            "    <title>Odpowiedź na aplikację</title>\n"
+            "</head>\n"
+            '<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; '
+            'max-width: 600px; margin: 0 auto; padding: 20px;">\n'
+            f"    {content}\n"
+            "</body>\n"
+            "</html>"
+        )
     
-    def _format_cv_data(self, cv_data: CVData) -> str:
-        """Format CV data for prompt."""
-        lines = [
-            f"Name: {cv_data.full_name}",
-            f"Email: {cv_data.email or 'N/A'}",
-            f"Phone: {cv_data.phone or 'N/A'}",
-            f"Location: {cv_data.location or 'N/A'}",
-        ]
-        
-        if cv_data.summary:
-            lines.append(f"\nSummary:\n{cv_data.summary}")
-        
-        if cv_data.experience:
-            lines.append("\nExperience:")
-            for exp in cv_data.experience:
-                lines.append(f"  - {exp.position} at {exp.company} ({exp.start_date or 'N/A'} - {exp.end_date or 'N/A'})")
-                if exp.description:
-                    lines.append(f"    {exp.description}")
-        
-        if cv_data.education:
-            lines.append("\nEducation:")
-            for edu in cv_data.education:
-                lines.append(f"  - {edu.degree} in {edu.field_of_study or 'N/A'} from {edu.institution}")
-        
-        if cv_data.skills:
-            lines.append("\nSkills:")
-            for skill in cv_data.skills:
-                lines.append(f"  - {skill.name} ({skill.proficiency or 'N/A'})")
-        
-        return "\n".join(lines)
-    
-    def _format_hr_feedback(self, hr_feedback: HRFeedback) -> str:
-        """Format HR feedback for prompt."""
-        lines = [
-            f"Decision: {hr_feedback.decision.value}",
-        ]
-        
-        if hr_feedback.notes:
-            lines.append(f"\nHR Notes:\n{hr_feedback.notes}")
-        
-        if hr_feedback.position_applied:
-            lines.append(f"\nPosition Applied: {hr_feedback.position_applied}")
-        
-        if hr_feedback.missing_requirements:
-            lines.append(f"\nMissing Requirements: {', '.join(hr_feedback.missing_requirements)}")
-        
-        return "\n".join(lines)
-    
-    def _format_job_offer(self, job_offer: JobOffer) -> str:
-        """Format job offer for prompt."""
-        lines = [
-            f"Job Title: {job_offer.title}",
-        ]
-        
-        if job_offer.company:
-            lines.append(f"Company: {job_offer.company}")
-        
-        if job_offer.location:
-            lines.append(f"Location: {job_offer.location}")
-        
-        if job_offer.description:
-            lines.append(f"\nJob Description:\n{job_offer.description}")
-        
-        return "\n".join(lines)
 

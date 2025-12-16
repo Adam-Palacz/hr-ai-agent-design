@@ -1,164 +1,49 @@
-"""LangChain agent for parsing CV from PDF files."""
+"""Azure OpenAI agent for parsing CV from PDF files (no LangChain)."""
+
 import json
-from typing import Optional, Dict, Any, Dict, Any
-
-try:
-    from langchain_openai import ChatOpenAI
-except ImportError:
-    try:
-        from langchain.chat_models import ChatOpenAI
-    except ImportError:
-        from langchain_community.chat_models import ChatOpenAI
-
-# Try modern LangChain imports first, fallback to legacy
-try:
-    from langchain_core.output_parsers import PydanticOutputParser
-except ImportError:
-    try:
-        from langchain.output_parsers import PydanticOutputParser
-    except ImportError:
-        from langchain_core.output_parsers.pydantic import PydanticOutputParser
+from typing import Optional, Dict, Any
 
 from models.cv_models import CVData
 from prompts.cv_parsing_prompt import CV_PARSING_PROMPT
 from utils.pdf_reader import extract_text_from_pdf
 from core.logger import logger
-
-# Import for tracking model responses
-try:
-    from database.models import save_model_response
-except ImportError:
-    save_model_response = None
+from config import settings
+from agents.base_agent import BaseAgent
+from utils.json_parser import strip_code_fences
 
 
-class CVParserAgent:
+class CVParserAgent(BaseAgent):
     """Agent for parsing CV information from PDF files."""
     
     def __init__(
         self,
-        model_name: str = "gpt-3.5-turbo",
-        temperature: float = 0.0,
+        model_name: str = None,
+        temperature: float = None,
         api_key: Optional[str] = None,
         vision_model_name: Optional[str] = None,
         use_ocr: bool = True,
-        timeout: int = 120,
+        timeout: int = 240,
         max_retries: int = 2
     ):
         """
-        Initialize CV Parser Agent.
-        
-        Args:
-            model_name: Name of the LLM model to use for parsing
-            temperature: Temperature for LLM generation
-            api_key: OpenAI API key (if not set, uses environment variable)
-            vision_model_name: Name of vision model for OCR (e.g., "gpt-4o", "gpt-4-vision-preview")
-                              If None, will use model_name if it supports vision
-            use_ocr: If True, use vision model for OCR when reading PDFs
-            timeout: Request timeout in seconds (default: 120)
-            max_retries: Maximum number of retries on failure (default: 2)
+        Initialize CV Parser Agent using Azure OpenAI SDK (no LangChain).
         """
         # Store model names and config for logging
-        self.model_name = model_name
-        # gpt-5 models may need longer timeout for complex prompts
-        if "gpt-5" in model_name.lower():
-            self.timeout = max(timeout, 180)  # At least 3 minutes for gpt-5
-            logger.info(f"Using extended timeout ({self.timeout}s) for {model_name} due to potential longer processing time")
-        else:
-            self.timeout = timeout
-        self.max_retries = max_retries
+        model_name_to_use = model_name or settings.openai_model
+        temperature_to_use = temperature if temperature is not None else settings.openai_temperature
         
-        # Initialize ChatOpenAI with proper parameter names
-        # Try 'model' first (newer langchain-openai), fallback to 'model_name' (older versions)
-        try:
-            llm_kwargs = {
-                "model": model_name,
-                "temperature": temperature,
-                "timeout": self.timeout,
-                "max_retries": max_retries,
-            }
-            if api_key:
-                llm_kwargs["openai_api_key"] = api_key
-            self.llm = ChatOpenAI(**llm_kwargs)
-        except TypeError:
-            # Fallback for older LangChain versions
-            llm_kwargs = {
-                "model_name": model_name,
-                "temperature": temperature,
-            }
-            if api_key:
-                llm_kwargs["openai_api_key"] = api_key
-            # Note: timeout and max_retries may not be supported in older versions
-            try:
-                llm_kwargs["timeout"] = self.timeout
-                llm_kwargs["max_retries"] = max_retries
-            except TypeError:
-                logger.warning("Older LangChain version detected - timeout and max_retries may not be supported")
-            self.llm = ChatOpenAI(**llm_kwargs)
+        # Ensure temperature is at least 1.0 for Azure (some deployments reject 0.0)
+        if temperature_to_use is None or temperature_to_use < 1.0:
+            temperature_to_use = 1.0
         
-        # Initialize vision model for OCR if needed
+        super().__init__(model_name_to_use, temperature_to_use, api_key, timeout, max_retries)
+        
+        # OCR: we no longer use an LLM-based vision model here; rely on pdf_reader defaults
         self.use_ocr = use_ocr
         self.vision_model = None
-        self.vision_model_name = None
+        self.vision_model_name = vision_model_name
         
-        if use_ocr:
-            # Determine vision model name
-            if vision_model_name:
-                ocr_model = vision_model_name
-            elif "gpt-4" in model_name.lower() or "gpt-4o" in model_name.lower():
-                # Model supports vision
-                ocr_model = model_name
-            else:
-                # Default to gpt-4o for OCR
-                ocr_model = "gpt-4o"
-            
-            # Store vision model name for logging
-            self.vision_model_name = ocr_model
-            
-            try:
-                # Use longer timeout for OCR (can be slower), but same retry count
-                vision_timeout = max(timeout, 180)  # At least 3 minutes for OCR
-                vision_kwargs = {
-                    "model": ocr_model,
-                    "temperature": 0.0,  # Low temperature for accurate OCR
-                    "timeout": vision_timeout,
-                    "max_retries": max_retries,
-                }
-                if api_key:
-                    vision_kwargs["openai_api_key"] = api_key
-                self.vision_model = ChatOpenAI(**vision_kwargs)
-            except TypeError:
-                vision_kwargs = {
-                    "model_name": ocr_model,
-                    "temperature": 0.0,
-                }
-                if api_key:
-                    vision_kwargs["openai_api_key"] = api_key
-                # Note: timeout and max_retries may not be supported in older versions
-                try:
-                    vision_timeout = max(timeout, 180)
-                    vision_kwargs["timeout"] = vision_timeout
-                    vision_kwargs["max_retries"] = max_retries
-                except TypeError:
-                    logger.warning("Older LangChain version detected - timeout and max_retries may not be supported for vision model")
-                self.vision_model = ChatOpenAI(**vision_kwargs)
-        else:
-            self.vision_model_name = None
-        
-        self.output_parser = PydanticOutputParser(pydantic_object=CVData)
-        
-        # Update prompt with format instructions
-        self.prompt_with_format = CV_PARSING_PROMPT.partial(
-            format_instructions=self.output_parser.get_format_instructions()
-        )
-        
-        # Try to use modern LCEL approach (LangChain Expression Language)
-        # Chain: prompt -> llm -> output_parser
-        try:
-            self.chain = self.prompt_with_format | self.llm | self.output_parser
-            self.use_lcel = True
-        except (TypeError, AttributeError):
-            # Fallback: use direct invocation (for older LangChain versions)
-            self.use_lcel = False
+        # We don't use PydanticOutputParser anymore; parsing is done manually via JSON + _transform_llm_response.
     
     def _transform_llm_response(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -403,7 +288,7 @@ class CVParserAgent:
                 f"Consider using gpt-4o or gpt-3.5-turbo for better reliability with long CVs."
             )
         
-        # Run LLM chain using modern invoke method or fallback
+        # Run LLM via Azure OpenAI
         try:
             if verbose:
                 print("    ⏳ Sending request to LLM (this may take 30-120 seconds)...")
@@ -412,192 +297,66 @@ class CVParserAgent:
             logger.info("Step 2: Sending request to LLM for structured parsing...")
             parsing_start = time.time()
             
-            if self.use_lcel:
-                input_data = {"cv_text": cv_text[:1000] + "..." if len(cv_text) > 1000 else cv_text}  # Truncate for storage
-                parsed_data = self.chain.invoke({"cv_text": cv_text})
-                parsing_time = time.time() - parsing_start
-                logger.info(f"Step 2 completed: LLM parsing successful in {parsing_time:.2f}s")
-                
-                # Track model response
-                if save_model_response:
-                    try:
-                        save_model_response(
-                            agent_type="cv_parser",
-                            model_name=self.model_name,
-                            input_data=input_data,
-                            output_data=parsed_data.dict() if hasattr(parsed_data, 'dict') else str(parsed_data),
-                            candidate_id=candidate_id,
-                            metadata={"temperature": getattr(self.llm, 'temperature', None), "parsing_time": parsing_time}
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to save model response: {str(e)}")
-                
-                if verbose:
-                    print(f"    ✅ Received response from LLM ({parsing_time:.2f}s)")
-                
-                total_time = time.time() - start_time
-                logger.info(f"CV parsing completed successfully in {total_time:.2f}s total")
-                logger.info("=" * 80)
-                
-                return parsed_data
-            else:
-                # Fallback for older LangChain versions
-                logger.info("Using fallback method (older LangChain version)")
-                formatted_prompt = self.prompt_with_format.format(cv_text=cv_text)
-                response = self.llm.invoke(formatted_prompt)
-                result = response.content if hasattr(response, 'content') else str(response)
-                parsed_data = self.output_parser.parse(result)
-                parsing_time = time.time() - parsing_start
-                logger.info(f"Step 2 completed: LLM parsing successful in {parsing_time:.2f}s")
-                
-                if verbose:
-                    print(f"    ✅ Received response from LLM ({parsing_time:.2f}s)")
-                
-                total_time = time.time() - start_time
-                logger.info(f"CV parsing completed successfully in {total_time:.2f}s total")
-                logger.info("=" * 80)
-                
-                return parsed_data
-        except Exception as e:
-            # Fallback: try to get raw response and parse manually
-            result = None
-            error_type = type(e).__name__
-            error_msg = str(e)
-            logger.warning(f"First parsing attempt failed: {error_type}: {error_msg}")
+            # Build prompt text
+            prompt_text = CV_PARSING_PROMPT.format(cv_text=cv_text)
             
-            # Provide helpful error context
-            is_connection_error = (
-                "connection" in error_msg.lower() or 
-                "APIConnectionError" in error_type or
-                "ConnectionError" in error_type or
-                "timeout" in error_msg.lower() or
-                "disconnected" in error_msg.lower() or
-                "RemoteProtocolError" in error_type or
-                "server disconnected" in error_msg.lower()
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are an expert CV parser. "
+                            "You must return valid JSON matching the CVData schema."
+                        ),
+                    },
+                    {"role": "user", "content": prompt_text},
+                ],
+                # max_completion_tokens=4000,
+                temperature=self.temperature,
             )
             
-            if is_connection_error:
-                logger.warning(
-                    f"Connection error detected. This may be due to:\n"
-                    f"  - Network connectivity issues\n"
-                    f"  - API timeout (current timeout: {self.timeout}s)\n"
-                    f"  - OpenAI API service issues\n"
-                    f"  - Model '{self.model_name}' may be experiencing high load\n"
-                    f"  - Prompt may be too long for this model\n"
-                    f"Retrying with direct LLM call..."
-                )
+            raw_text = ""
+            if response and response.choices:
+                msg = response.choices[0].message
+                if msg and msg.content:
+                    raw_text = msg.content
             
-            try:
-                if verbose:
-                    print(f"    ⚠️ First parsing attempt failed: {error_type}")
-                    if is_connection_error:
-                        print(f"    🔄 Connection issue detected. Retrying...")
-                    else:
-                        print("    🔄 Retrying with direct LLM call...")
-                
-                logger.debug(f"Retrying with direct LLM call. Error details: {error_msg}")
-                
-                # Get raw response from LLM
-                response = self.llm.invoke(self.prompt_with_format.format(cv_text=cv_text))
-                result = response.content if hasattr(response, 'content') else str(response)
-                
-                logger.debug(f"Received raw response from LLM (length: {len(result) if result else 0})")
-                
-                # Try to extract JSON from the response
-                if "```json" in result:
-                    json_start = result.find("```json") + 7
-                    json_end = result.find("```", json_start)
-                    result = result[json_start:json_end].strip()
-                    logger.debug("Extracted JSON from ```json code block")
-                elif "```" in result:
-                    json_start = result.find("```") + 3
-                    json_end = result.find("```", json_start)
-                    result = result[json_start:json_end].strip()
-                    logger.debug("Extracted JSON from ``` code block")
-                
-                parsed_data = self.output_parser.parse(result)
-                logger.info("Successfully parsed CV data on retry")
-                if verbose:
-                    print("    ✅ Successfully parsed on retry")
-                return parsed_data
-            except Exception as parse_error:
-                parse_error_type = type(parse_error).__name__
-                parse_error_msg = str(parse_error)
-                logger.error(f"Retry parsing failed: {parse_error_type}: {parse_error_msg}")
-                
-                # Final fallback: try to parse as JSON directly
-                if result is None:
-                    # Check if it's a connection error
-                    is_connection_error = (
-                        "connection" in parse_error_msg.lower() or 
-                        "APIConnectionError" in parse_error_type or
-                        "ConnectionError" in parse_error_type or
-                        "timeout" in parse_error_msg.lower() or
-                        "disconnected" in parse_error_msg.lower() or
-                        "RemoteProtocolError" in parse_error_type or
-                        "server disconnected" in parse_error_msg.lower()
-                    )
-                    
-                    if is_connection_error:
-                        error_msg = (
-                            f"Failed to connect to OpenAI API after retries.\n"
-                            f"Error: {parse_error_msg}\n"
-                            f"Model: {self.model_name}\n"
-                            f"Timeout: {self.timeout}s\n"
-                            f"Possible causes:\n"
-                            f"  - Network connectivity issues - check your internet connection\n"
-                            f"  - API timeout - the request took too long (timeout: {self.timeout}s)\n"
-                            f"  - OpenAI API service issues - check OpenAI status page\n"
-                            f"  - Model '{self.model_name}' may be experiencing high load - try again later\n"
-                            f"  - Prompt may be too long for this model - try using a different model (e.g., gpt-4o)\n"
-                            f"  - API key issues - verify your OPENAI_API_KEY is correct\n"
-                            f"\nTip: Try running 'python test_openai_connection.py' to test your connection.\n"
-                            f"Tip: Models gpt-5 and gpt-5-mini may have issues with long prompts.\n"
-                            f"     For CV parsing, consider using:\n"
-                            f"     - gpt-4o (recommended for CV parsing)\n"
-                            f"     - gpt-3.5-turbo (faster, cheaper)\n"
-                            f"     Set OPENAI_MODEL=gpt-4o in your .env file or settings.py"
-                        )
-                    else:
-                        error_msg = f"Failed to get response from LLM: {parse_error_msg}. Please check your API key and internet connection."
-                    
-                    logger.error(error_msg)
-                    raise Exception(error_msg)
-                
-                try:
-                    logger.debug("Attempting final fallback: parsing JSON and transforming data")
-                    
-                    if isinstance(result, str):
-                        data = json.loads(result)
-                        logger.debug(f"Parsed JSON string (keys: {list(data.keys()) if isinstance(data, dict) else 'N/A'})")
-                    else:
-                        data = result
-                    
-                    # Log the structure of additional_info if present
-                    if isinstance(data, dict) and "additional_info" in data:
-                        additional_info = data["additional_info"]
-                        logger.debug(f"additional_info type: {type(additional_info)}, value: {str(additional_info)[:200] if additional_info else 'None'}")
-                    
-                    # Transform data to match Pydantic model
-                    transformed_data = self._transform_llm_response(data)
-                    
-                    # Log transformed additional_info
-                    if "additional_info" in transformed_data:
-                        logger.debug(f"Transformed additional_info type: {type(transformed_data['additional_info'])}, value: {str(transformed_data['additional_info'])[:200] if transformed_data['additional_info'] else 'None'}")
-                    
-                    logger.info("Successfully transformed and validated CV data")
-                    return CVData(**transformed_data)
-                except Exception as final_error:
-                    error_msg = f"Failed to parse CV data: {str(final_error)}. Original error: {str(e)}"
-                    logger.error(error_msg, exc_info=True)
-                    
-                    # Log validation errors in detail
-                    if "validation error" in str(final_error).lower():
-                        logger.error(f"Pydantic validation error details: {str(final_error)}")
-                        if isinstance(data, dict):
-                            logger.debug(f"Problematic data structure: {json.dumps(data, indent=2, default=str)[:1000]}")
-                    
-                    raise Exception(error_msg)
+            if not raw_text or not str(raw_text).strip():
+                raise Exception(
+                    f"Model returned empty response for CV parsing. "
+                    f"Check Azure deployment '{self.model_name}' and API availability."
+                )
+            parsing_time = time.time() - parsing_start
+            logger.info(f"Step 2 completed: LLM parsing successful in {parsing_time:.2f}s")
+            
+            # Track model response
+            self._save_model_response(
+                agent_type="cv_parser",
+                input_data={
+                    "cv_text": cv_text[:1000] + "..." if len(cv_text) > 1000 else cv_text
+                },
+                output_data=raw_text,
+                candidate_id=candidate_id,
+                metadata={"temperature": self.temperature, "parsing_time": parsing_time},
+            )
+            
+            # Parse raw_text into CVData
+            parsed_data = self._parse_cv_from_text_raw(raw_text)
+            
+            if verbose:
+                print(f"    ✅ Received response from LLM ({parsing_time:.2f}s)")
+            
+            total_time = time.time() - start_time
+            logger.info(f"CV parsing completed successfully in {total_time:.2f}s total")
+            logger.info("=" * 80)
+            
+            return parsed_data
+        except Exception as e:
+            error_type = type(e).__name__
+            error_msg = str(e)
+            logger.error(f"Failed to parse CV: {error_type}: {error_msg}", exc_info=True)
+            raise Exception(f"Failed to parse CV: {error_msg}") from e
     
     def parse_cv_from_text(self, cv_text: str, candidate_id: Optional[int] = None) -> CVData:
         """
@@ -609,52 +368,48 @@ class CVParserAgent:
         Returns:
             CVData object with parsed information
         """
-        # Run LLM chain using modern invoke method or fallback
+        # Run LLM via Azure OpenAI
         try:
-            if self.use_lcel:
-                parsed_data = self.chain.invoke({"cv_text": cv_text})
-                return parsed_data
-            else:
-                # Fallback for older LangChain versions
-                formatted_prompt = self.prompt_with_format.format(cv_text=cv_text)
-                response = self.llm.invoke(formatted_prompt)
-                result = response.content if hasattr(response, 'content') else str(response)
-                parsed_data = self.output_parser.parse(result)
-                return parsed_data
+            # Build prompt text
+            prompt_text = CV_PARSING_PROMPT.format(cv_text=cv_text)
+            
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are an expert CV parser. "
+                            "You must return valid JSON matching the CVData schema."
+                        ),
+                    },
+                    {"role": "user", "content": prompt_text},
+                ],
+                # max_completion_tokens=4000,
+                temperature=self.temperature,
+            )
+            raw_text = response.choices[0].message.content
+            return self._parse_cv_from_text_raw(raw_text)
         except Exception as e:
-            # Fallback: try to get raw response and parse manually
-            result = None
-            try:
-                # Get raw response from LLM
-                response = self.llm.invoke(self.prompt_with_format.format(cv_text=cv_text))
-                result = response.content if hasattr(response, 'content') else str(response)
-                
-                # Try to extract JSON from the response
-                if "```json" in result:
-                    json_start = result.find("```json") + 7
-                    json_end = result.find("```", json_start)
-                    result = result[json_start:json_end].strip()
-                elif "```" in result:
-                    json_start = result.find("```") + 3
-                    json_end = result.find("```", json_start)
-                    result = result[json_start:json_end].strip()
-                
-                parsed_data = self.output_parser.parse(result)
-                return parsed_data
-            except Exception as parse_error:
-                # Final fallback: try to parse as JSON directly
-                if result is None:
-                    raise Exception(f"Failed to get response from LLM. Connection error: {str(e)}. Please check your API key and internet connection.")
-                
-                try:
-                    if isinstance(result, str):
-                        data = json.loads(result)
-                    else:
-                        data = result
-                    
-                    # Transform data to match Pydantic model
-                    transformed_data = self._transform_llm_response(data)
-                    return CVData(**transformed_data)
-                except Exception as final_error:
-                    raise Exception(f"Failed to parse CV data: {str(final_error)}. Original error: {str(e)}")
+            raise Exception(f"Failed to parse CV text: {str(e)}") from e
+
+    def _parse_cv_from_text_raw(self, text: str) -> CVData:
+        """
+        Parse CVData from raw model text, using JSON + _transform_llm_response.
+        """
+        if not text:
+            raise ValueError("Empty response from CV parser model")
+
+        # Strip code fences
+        cleaned_text = strip_code_fences(text)
+
+        # Try to parse JSON and transform
+        try:
+            data = json.loads(cleaned_text)
+            transformed_data = self._transform_llm_response(data)
+            return CVData(**transformed_data)
+        except json.JSONDecodeError as e:
+            raise Exception(f"Failed to parse CV data from model output: {str(e)}") from e
+        except Exception as e:
+            raise Exception(f"Failed to transform CV data: {str(e)}") from e
 

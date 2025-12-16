@@ -79,7 +79,7 @@ def main():
         logger.info("Initializing agents...")
         cv_parser = CVParserAgent(
             model_name=settings.openai_model,
-            vision_model_name=settings.openai_vision_model,
+            vision_model_name=settings.azure_openai_vision_deployment,
             use_ocr=settings.use_ocr,
             temperature=settings.openai_temperature,
             api_key=settings.api_key,
@@ -106,7 +106,7 @@ def main():
         print(f"📄 File: {pdf_path}")
         print(f"🔧 Verbose mode: {settings.verbose}")
         print(f"🤖 Model: {settings.openai_model}")
-        print(f"👁️ Vision model: {settings.openai_vision_model}")
+        print(f"👁️ Vision model (Azure deployment): {settings.azure_openai_vision_deployment}")
         print(f"🔍 OCR enabled: {settings.use_ocr}")
         print()
         
