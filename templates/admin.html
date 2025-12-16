@@ -36,6 +36,7 @@
         .nav-links {
             display: flex;
             gap: 15px;
+            flex-wrap: wrap;
         }
         .btn {
             padding: 10px 20px;
@@ -194,6 +195,7 @@
             <h1>🔐 Panel Administracyjny</h1>
             <div class="nav-links">
                 <a href="{{ url_for('index') }}" class="btn btn-secondary">← Powrót do listy</a>
+                <a href="{{ url_for('tickets_list') }}" class="btn" style="background: #ff6b6b;">🎫 Tickety</a>
                 <a href="{{ url_for('db_view') }}" class="btn" style="background: #10b981;">🗄️ Widok Bazy Danych</a>
                 <a href="{{ url_for('db_export') }}" class="btn" style="background: #059669;">💾 Eksportuj JSON</a>
             </div>
@@ -212,6 +214,10 @@
             <div class="stat-card">
                 <div class="stat-value">{{ feedback_emails|length }}</div>
                 <div class="stat-label">Wysłane emaile</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ tickets|length }}</div>
+                <div class="stat-label">Tickety</div>
             </div>
         </div>
 
@@ -519,6 +525,94 @@
                 <div class="empty-state">
                     <div class="empty-state-icon">📭</div>
                     <p>Brak odpowiedzi modeli w bazie danych</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Tickets Table -->
+        <div class="section">
+            <div class="section-header">
+                <h2>🎫 Tickety ({{ tickets|length }})</h2>
+            </div>
+            <div class="table-container">
+                {% if tickets %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Dział</th>
+                            <th>Priorytet</th>
+                            <th>Status</th>
+                            <th>Opis</th>
+                            <th>Deadline</th>
+                            <th>Kandydat</th>
+                            <th>Email</th>
+                            <th>Utworzono</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ticket in tickets %}
+                        <tr>
+                            <td>#{{ ticket.id }}</td>
+                            <td>
+                                <span class="badge" style="background: {% if ticket.department.value == 'IOD' %}#ff6b6b{% elif ticket.department.value == 'HR' %}#4ecdc4{% elif ticket.department.value == 'IT' %}#45b7d1{% else %}#96ceb4{% endif %}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                                    {{ ticket.department.value }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge" style="background: {% if ticket.priority.value == 'low' %}#95e1d3{% elif ticket.priority.value == 'medium' %}#fce38a{% elif ticket.priority.value == 'high' %}#f38181{% else %}#aa2e25{% endif %}; color: {% if ticket.priority.value == 'urgent' %}white{% else %}#333{% endif %}; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                                    {{ ticket.priority.value.upper() }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge" style="background: {% if ticket.status.value == 'open' %}#e8f4f8{% elif ticket.status.value == 'in_progress' %}#fff3cd{% elif ticket.status.value == 'resolved' %}#d4edda{% else %}#d1ecf1{% endif %}; color: {% if ticket.status.value == 'open' %}#2c3e50{% elif ticket.status.value == 'in_progress' %}#856404{% elif ticket.status.value == 'resolved' %}#155724{% else %}#0c5460{% endif %}; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                                    {% if ticket.status.value == 'open' %}Otwarty
+                                    {% elif ticket.status.value == 'in_progress' %}W trakcie
+                                    {% elif ticket.status.value == 'resolved' %}Rozwiązany
+                                    {% elif ticket.status.value == 'closed' %}Zamknięty
+                                    {% else %}{{ ticket.status.value }}{% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                <div style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    {{ ticket.description[:100] if ticket.description else 'Brak opisu' }}{% if ticket.description and ticket.description|length > 100 %}...{% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if ticket.deadline %}
+                                    {{ ticket.deadline.strftime('%Y-%m-%d %H:%M') if ticket.deadline else 'Brak' }}
+                                {% else %}
+                                    Brak
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if ticket.candidate_name and ticket.candidate_name != 'Brak' %}
+                                    <a href="/candidate/{{ ticket.related_candidate_id }}" style="color: #667eea; text-decoration: none;">
+                                        {{ ticket.candidate_name }}
+                                    </a>
+                                {% else %}
+                                    <span style="color: #999;">Brak</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if ticket.candidate_email and ticket.candidate_email != 'Brak' %}
+                                    {{ ticket.candidate_email }}
+                                {% else %}
+                                    <span style="color: #999;">Brak</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ ticket.created_at.strftime('%Y-%m-%d %H:%M') if ticket.created_at else 'N/A' }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-state-icon">📭</div>
+                    <p>Brak ticketów w bazie danych</p>
                 </div>
                 {% endif %}
             </div>

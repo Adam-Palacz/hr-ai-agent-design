@@ -46,6 +46,8 @@ class EmailRouter:
         self.smtp_use_tls = smtp_use_tls
         self.iod_email = iod_email
         self.hr_email = hr_email
+        # Track processed emails to prevent duplicates (using Message-ID or UID)
+        self.processed_emails = set()
     
     def route_email(self, email_data: Dict, classification: str) -> bool:
         """
@@ -59,6 +61,18 @@ class EmailRouter:
             True if routing was successful
         """
         try:
+            # Check for duplicates using Message-ID or UID
+            email_id = email_data.get('message_id') or email_data.get('uid')
+            if email_id:
+                if email_id in self.processed_emails:
+                    logger.warning(f"Email {email_id} already processed, skipping duplicate")
+                    return True  # Return True to avoid reprocessing
+                self.processed_emails.add(email_id)
+                # Keep only last 1000 processed emails to prevent memory issues
+                if len(self.processed_emails) > 1000:
+                    # Remove oldest entries (simple approach: clear and rebuild from recent)
+                    self.processed_emails = set(list(self.processed_emails)[-500:])
+            
             if classification == 'iod':
                 return self._route_to_iod(email_data)
             elif classification in ['consent_yes', 'consent_no']:
@@ -70,20 +84,76 @@ class EmailRouter:
             return False
     
     def _route_to_iod(self, email_data: Dict) -> bool:
-        """Route email to IOD department and send acknowledgment to sender."""
+        """Route email to IOD department, create ticket, and send acknowledgment to sender."""
         try:
+            from datetime import datetime, timedelta
+            from database.models import (
+                create_ticket, TicketDepartment, TicketPriority, TicketStatus,
+                get_candidate_by_email
+            )
+            
+            # Create ticket for IOD
+            from_email = email_data.get('from_email', 'Nieznany')
+            email_subject = email_data.get('subject', 'Brak tematu')
+            email_body = email_data.get('body', 'Brak treści')
+            
+            # Try to find related candidate (get the latest one if multiple exist)
+            related_candidate_id = None
+            try:
+                from database.models import get_all_candidates
+                # Get all candidates with this email and take the latest one (most recent created_at or highest ID)
+                all_candidates = get_all_candidates()
+                candidates_with_email = [c for c in all_candidates if c.email.lower() == from_email.lower()]
+                if candidates_with_email:
+                    # Sort by created_at DESC (most recent first), then by ID DESC as fallback
+                    # Use a tuple for sorting: (created_at timestamp, id) - both descending
+                    latest_candidate = max(
+                        candidates_with_email, 
+                        key=lambda c: (
+                            c.created_at.timestamp() if c.created_at else 0,
+                            c.id or 0
+                        )
+                    )
+                    related_candidate_id = latest_candidate.id
+                    logger.info(f"Found candidate {related_candidate_id} ({latest_candidate.full_name}) for email {from_email} (selected latest from {len(candidates_with_email)} candidates)")
+            except Exception as e:
+                logger.warning(f"Error finding candidate for email {from_email}: {str(e)}")
+                pass
+            
+            # Create ticket with 7 days deadline for IOD incidents
+            deadline = datetime.now() + timedelta(days=7)
+            ticket_description = (
+                f"Email od: {from_email}\n"
+                f"Temat: {email_subject}\n\n"
+                f"Treść wiadomości:\n{email_body}\n\n"
+                f"Message-ID: {email_data.get('message_id', 'Brak')}"
+            )
+            
+            try:
+                ticket = create_ticket(
+                    department=TicketDepartment.IOD,
+                    priority=TicketPriority.HIGH,
+                    description=ticket_description,
+                    deadline=deadline,
+                    related_candidate_id=related_candidate_id,
+                    related_email_id=email_data.get('message_id')
+                )
+                logger.info(f"Created ticket #{ticket.id} for IOD incident from {from_email}")
+            except Exception as e:
+                logger.warning(f"Failed to create ticket for IOD: {str(e)}")
+            
             # Forward email to IOD
-            subject = f"[IOD] {email_data.get('subject', 'Brak tematu')}"
+            subject = f"[IOD] {email_subject}"
             body = f"""
-Email otrzymany od: {email_data.get('from_email', 'Nieznany')}
+Email otrzymany od: {from_email}
 Data: {email_data.get('date', 'Nieznana')}
-Temat: {email_data.get('subject', 'Brak tematu')}
+Temat: {email_subject}
 
 ---
 Treść wiadomości:
 ---
 
-{email_data.get('body', 'Brak treści')}
+{email_body}
 
 ---
 Oryginalny Message-ID: {email_data.get('message_id', 'Brak')}
@@ -94,12 +164,12 @@ In-Reply-To: {email_data.get('in_reply_to', 'Brak')}
                 to_email=self.iod_email,
                 subject=subject,
                 body=body,
-                reply_to=email_data.get('from_email')
+                reply_to=from_email
             )
             
             if success:
                 # Send acknowledgment to original sender
-                ack_subject = "Re: " + email_data.get('subject', 'Twoja wiadomość')
+                ack_subject = "Re: " + email_subject
                 ack_body = """
 Dziękujemy za kontakt.
 
@@ -112,11 +182,11 @@ Z wyrazami szacunku
 Dział HR
 """
                 self._send_email(
-                    to_email=email_data.get('from_email'),
+                    to_email=from_email,
                     subject=ack_subject,
                     body=ack_body
                 )
-                logger.info(f"Email routed to IOD and acknowledgment sent to {email_data.get('from_email')}")
+                logger.info(f"Email routed to IOD and acknowledgment sent to {from_email}")
             
             return success
             

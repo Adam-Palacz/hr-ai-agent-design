@@ -187,8 +187,13 @@ class EmailMonitor:
                             except Exception as e:
                                 logger.error(f"Error processing email seq={msg_num}: {str(e)}", exc_info=True)
 
-                        # Update last_msg_num to the newest processed
-                        self.last_msg_num = max(all_msg_nums)
+                        # Update last_msg_num to the newest processed message
+                        # Use max of processed messages, not all messages, to avoid skipping
+                        if new_msg_nums:
+                            self.last_msg_num = max(new_msg_nums)
+                        else:
+                            # If no new messages, keep current last_msg_num
+                            self.last_msg_num = max(all_msg_nums) if all_msg_nums else self.last_msg_num
                 
                 # Disconnect
                 self.listener.disconnect()

@@ -29,7 +29,9 @@ from database.models import (
     save_model_response, get_model_responses_for_candidate, get_all_model_responses,
     CandidateStatus, RecruitmentStage, 
     get_all_positions, create_position, get_position_by_id, update_position, delete_position,
-    HRNote, create_hr_note, get_hr_notes_for_candidate, get_all_hr_notes
+    HRNote, create_hr_note, get_hr_notes_for_candidate, get_all_hr_notes,
+    Ticket, TicketStatus, TicketPriority, TicketDepartment,
+    create_ticket, get_ticket_by_id, get_all_tickets, update_ticket, delete_ticket
 )
 
 # Load environment variables
@@ -479,6 +481,110 @@ def delete_position_route(position_id):
     return redirect(url_for('positions_list'))
 
 
+@app.route('/tickets')
+def tickets_list():
+    """List all tickets."""
+    tickets = get_all_tickets()
+    
+    # Get candidate information for tickets
+    candidates_dict = {c.id: c for c in get_all_candidates()}
+    for ticket in tickets:
+        if ticket.related_candidate_id and ticket.related_candidate_id in candidates_dict:
+            ticket.candidate = candidates_dict[ticket.related_candidate_id]
+        else:
+            ticket.candidate = None
+    
+    return render_template('tickets_list.html', tickets=tickets)
+
+
+@app.route('/tickets/add', methods=['GET', 'POST'])
+def add_ticket():
+    """Add a new ticket."""
+    if request.method == 'POST':
+        department = request.form.get('department', '').strip()
+        priority = request.form.get('priority', '').strip()
+        status = request.form.get('status', '').strip()
+        description = request.form.get('description', '').strip()
+        deadline_str = request.form.get('deadline', '').strip()
+        
+        if not department or not priority or not description:
+            flash('Wypełnij wszystkie wymagane pola', 'error')
+            return redirect(url_for('add_ticket'))
+        
+        deadline = None
+        if deadline_str:
+            try:
+                deadline = datetime.fromisoformat(deadline_str.replace('T', ' '))
+            except ValueError:
+                flash('Nieprawidłowy format daty deadline', 'error')
+                return redirect(url_for('add_ticket'))
+        
+        create_ticket(
+            department=TicketDepartment(department),
+            priority=TicketPriority(priority),
+            status=TicketStatus(status) if status else TicketStatus.OPEN,
+            description=description,
+            deadline=deadline
+        )
+        
+        flash('Ticket został utworzony', 'success')
+        return redirect(url_for('tickets_list'))
+    
+    return render_template('add_ticket.html')
+
+
+@app.route('/tickets/<int:ticket_id>/edit', methods=['GET', 'POST'])
+def edit_ticket(ticket_id):
+    """Edit a ticket."""
+    ticket = get_ticket_by_id(ticket_id)
+    if not ticket:
+        flash('Ticket nie został znaleziony', 'error')
+        return redirect(url_for('tickets_list'))
+    
+    if request.method == 'POST':
+        department = request.form.get('department', '').strip()
+        priority = request.form.get('priority', '').strip()
+        status = request.form.get('status', '').strip()
+        description = request.form.get('description', '').strip()
+        deadline_str = request.form.get('deadline', '').strip()
+        
+        if not department or not priority or not description:
+            flash('Wypełnij wszystkie wymagane pola', 'error')
+            return redirect(url_for('edit_ticket', ticket_id=ticket_id))
+        
+        deadline = None
+        if deadline_str:
+            try:
+                deadline = datetime.fromisoformat(deadline_str.replace('T', ' '))
+            except ValueError:
+                flash('Nieprawidłowy format daty deadline', 'error')
+                return redirect(url_for('edit_ticket', ticket_id=ticket_id))
+        
+        update_ticket(
+            ticket_id,
+            department=TicketDepartment(department),
+            priority=TicketPriority(priority),
+            status=TicketStatus(status) if status else None,
+            description=description,
+            deadline=deadline
+        )
+        
+        flash('Ticket został zaktualizowany', 'success')
+        return redirect(url_for('tickets_list'))
+    
+    return render_template('edit_ticket.html', ticket=ticket)
+
+
+@app.route('/tickets/<int:ticket_id>/delete', methods=['POST'])
+def delete_ticket_route(ticket_id):
+    """Delete a ticket."""
+    if delete_ticket(ticket_id):
+        flash('Ticket został usunięty', 'success')
+    else:
+        flash('Nie można usunąć ticketu', 'error')
+    return redirect(url_for('tickets_list'))
+
+
 @app.route('/process', methods=['POST'])
 def process_feedback():
     """Process CV and generate feedback."""
@@ -814,6 +920,7 @@ def admin_panel():
         feedback_emails = get_all_feedback_emails()
         hr_notes = get_all_hr_notes()
         model_responses = get_all_model_responses()
+        tickets = get_all_tickets()
         
         # Get position names for candidates
         position_dict = {pos.id: pos for pos in positions}
@@ -869,7 +976,8 @@ def admin_panel():
                             positions=positions,
                             feedback_emails=feedback_emails,
                             hr_notes=hr_notes,
-                            model_responses=model_responses)
+                            model_responses=model_responses,
+                            tickets=tickets)
     except Exception as e:
         logger.error(f"Error loading admin panel: {str(e)}", exc_info=True)
         flash(f'Błąd podczas ładowania panelu admina: {str(e)}', 'error')
