@@ -160,8 +160,7 @@
             
             <div class="form-group">
                 <label for="consent_for_other_positions">Zgoda na rozważenie do innych stanowisk</label>
-                <select name="consent_for_other_positions" id="consent_for_other_positions">
-                    <option value="" {% if candidate.consent_for_other_positions == none or candidate.consent_for_other_positions is none %}selected{% endif %}>-- Nie określono --</option>
+                <select name="consent_for_other_positions" id="consent_for_other_positions" required>
                     <option value="1" {% if candidate.consent_for_other_positions == True %}selected{% endif %}>✅ Tak</option>
                     <option value="0" {% if candidate.consent_for_other_positions == False %}selected{% endif %}>❌ Nie</option>
                 </select>

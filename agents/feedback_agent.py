@@ -108,7 +108,7 @@ class FeedbackAgent(BaseAgent):
 
             raw_text = response.choices[0].message.content
 
-            # Track model response
+            # Track model response (with token usage and cost)
             self._save_model_response(
                 agent_type="feedback_generator",
                 input_data={
@@ -121,6 +121,7 @@ class FeedbackAgent(BaseAgent):
                 output_data=raw_text,
                 candidate_id=candidate_id,
                 metadata={"temperature": self.temperature},
+                response=response,  # Pass response to extract tokens and costs
             )
 
             # Parse JSON into CandidateFeedback

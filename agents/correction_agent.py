@@ -108,7 +108,7 @@ class FeedbackCorrectionAgent(BaseAgent):
 
             raw_text = response.choices[0].message.content
 
-            # Track model response
+            # Track model response (with token usage and cost)
             metadata = {"temperature": self.temperature}
             if correction_number is not None:
                 metadata["correction_number"] = correction_number
@@ -127,6 +127,7 @@ class FeedbackCorrectionAgent(BaseAgent):
                 },
                 output_data=raw_text,
                 candidate_id=candidate_id,
+                response=response,  # Pass response to extract tokens and costs
                 metadata=metadata,
             )
 

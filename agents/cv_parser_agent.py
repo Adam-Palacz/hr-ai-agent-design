@@ -330,7 +330,7 @@ class CVParserAgent(BaseAgent):
             parsing_time = time.time() - parsing_start
             logger.info(f"Step 2 completed: LLM parsing successful in {parsing_time:.2f}s")
             
-            # Track model response
+            # Track model response (with token usage and cost)
             self._save_model_response(
                 agent_type="cv_parser",
                 input_data={
@@ -339,6 +339,7 @@ class CVParserAgent(BaseAgent):
                 output_data=raw_text,
                 candidate_id=candidate_id,
                 metadata={"temperature": self.temperature, "parsing_time": parsing_time},
+                response=response,  # Pass response to extract tokens and costs
             )
             
             # Parse raw_text into CVData

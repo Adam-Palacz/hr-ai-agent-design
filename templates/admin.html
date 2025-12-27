@@ -195,6 +195,7 @@
             <h1>🔐 Panel Administracyjny</h1>
             <div class="nav-links">
                 <a href="{{ url_for('index') }}" class="btn btn-secondary">← Powrót do listy</a>
+                <a href="{{ url_for('metrics_dashboard') }}" class="btn" style="background: #8b5cf6;">📊 Metryki</a>
                 <a href="{{ url_for('tickets_list') }}" class="btn" style="background: #ff6b6b;">🎫 Tickety</a>
                 <a href="{{ url_for('db_view') }}" class="btn" style="background: #10b981;">🗄️ Widok Bazy Danych</a>
                 <a href="{{ url_for('db_export') }}" class="btn" style="background: #059669;">💾 Eksportuj JSON</a>
@@ -274,7 +275,7 @@
                                 {% elif candidate.consent_for_other_positions == False %}
                                     <span class="badge" style="background: #f8d7da; color: #721c24;">❌ Nie</span>
                                 {% else %}
-                                    <span class="badge" style="background: #e2e3e5; color: #383d41;">❓ Nie określono</span>
+                                    <span class="badge" style="background: #f8d7da; color: #721c24;">❌ Nie</span>
                                 {% endif %}
                             </td>
                             <td>

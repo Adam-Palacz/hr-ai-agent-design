@@ -21,6 +21,7 @@ from agents.validation_agent import FeedbackValidatorAgent
 from agents.correction_agent import FeedbackCorrectionAgent
 from services.cv_service import CVService
 from services.feedback_service import FeedbackService
+from services.metrics_service import metrics_service
 from models.feedback_models import HRFeedback, Decision, FeedbackFormat
 from database.models import (
     init_db, get_all_candidates, get_candidate_by_id, create_candidate,
@@ -337,12 +338,10 @@ def add_candidate():
         
         # Handle consent_for_other_positions
         consent_value = request.form.get('consent_for_other_positions', '').strip()
-        consent_bool = None
-        if consent_value == '1':
-            consent_bool = True
-        elif consent_value == '0':
-            consent_bool = False
-        # If empty string, leave as None
+        if consent_value not in ('1', '0'):
+            flash('Wybierz zgodę na rozważenie do innych stanowisk (Tak/Nie)', 'error')
+            return redirect(url_for('add_candidate'))
+        consent_bool = True if consent_value == '1' else False
         
         # Create candidate
         position_id_int = int(position_id) if position_id else None
@@ -396,12 +395,10 @@ def edit_candidate(candidate_id):
         
         # Handle consent_for_other_positions
         consent_value = request.form.get('consent_for_other_positions', '').strip()
-        consent_bool = None
-        if consent_value == '1':
-            consent_bool = True
-        elif consent_value == '0':
-            consent_bool = False
-        # If empty string, leave as None
+        if consent_value not in ('1', '0'):
+            flash('Wybierz zgodę na rozważenie do innych stanowisk (Tak/Nie)', 'error')
+            return redirect(url_for('edit_candidate', candidate_id=candidate_id))
+        consent_bool = True if consent_value == '1' else False
         
         update_candidate(
             candidate_id,
@@ -981,6 +978,23 @@ def admin_panel():
     except Exception as e:
         logger.error(f"Error loading admin panel: {str(e)}", exc_info=True)
         flash(f'Błąd podczas ładowania panelu admina: {str(e)}', 'error')
+        return redirect(url_for('index'))
+
+
+@app.route('/metrics')
+def metrics_dashboard():
+    """Metrics dashboard showing system performance and health metrics."""
+    try:
+        days = request.args.get('days', 30, type=int)
+        if days < 1 or days > 365:
+            days = 30
+        
+        all_metrics = metrics_service.get_all_metrics(days=days)
+        
+        return render_template('metrics.html', metrics=all_metrics, days=days)
+    except Exception as e:
+        logger.error(f"Error loading metrics dashboard: {str(e)}", exc_info=True)
+        flash(f'Błąd podczas ładowania metryk: {str(e)}', 'error')
         return redirect(url_for('index'))
 
 

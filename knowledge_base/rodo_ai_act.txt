@@ -1,0 +1,159 @@
+RODO I AI ACT - WYMAGANIA PRAWNE W REKRUTACJI
+
+1. OCHRONA DANYCH OSOBOWYCH (RODO)
+
+1.1. Podstawowe zasady:
+- Przetwarzanie danych osobowych kandydatów wymaga podstawy prawnej
+- W rekrutacji podstawą prawną jest realizacja umowy przed zawarciem umowy (art. 6 ust. 1 lit. b RODO)
+- Kandydat ma prawo do informacji o przetwarzaniu jego danych (art. 13 RODO)
+- Kandydat ma prawo do dostępu do swoich danych (art. 15 RODO)
+- Kandydat ma prawo do sprostowania danych (art. 16 RODO)
+- Kandydat ma prawo do usunięcia danych (art. 17 RODO - "prawo do bycia zapomnianym")
+- Kandydat ma prawo do sprzeciwu wobec przetwarzania (art. 21 RODO)
+
+1.2. Informacje dla kandydatów:
+- Kandydaci muszą być poinformowani o:
+  * Administratorze danych (firma)
+  * Inspektorze Ochrony Danych (IOD)
+  * Celu przetwarzania danych (rekrutacja)
+  * Podstawie prawnej przetwarzania
+  * Okresie przechowywania danych
+  * Prawach kandydata
+  * Możliwości wniesienia skargi do organu nadzorczego (UODO)
+
+1.3. Przechowywanie danych:
+- Dane kandydatów mogą być przechowywane przez okres rekrutacji
+- Po zakończeniu rekrutacji, dane powinny być usunięte, chyba że:
+  * Kandydat wyraził zgodę na przechowywanie danych dla przyszłych rekrutacji
+  * Wymagają tego przepisy prawa (np. archiwizacja)
+  * Dane są niezbędne do dochodzenia roszczeń
+
+1.4. Zgoda kandydata:
+- Zgoda na przetwarzanie danych dla innych rekrutacji musi być:
+  * Dobrowolna
+  * Świadoma
+  * Konkretna
+  * Możliwa do wycofania w każdej chwili
+- Zgoda nie może być warunkiem uczestnictwa w rekrutacji
+- Kandydat może wycofać zgodę w każdej chwili
+
+1.5. Bezpieczeństwo danych:
+- Dane kandydatów muszą być chronione przed:
+  * Nieuprawnionym dostępem
+  * Utratą
+  * Zniszczeniem
+  * Zmianą
+- Należy stosować odpowiednie środki techniczne i organizacyjne
+- Dostęp do danych mają tylko uprawnione osoby
+
+2. AI ACT - REGULACJA SZTUCZNEJ INTELIGENCJI
+
+2.1. Zastosowanie AI w rekrutacji:
+- Systemy AI używane w rekrutacji są klasyfikowane jako systemy wysokiego ryzyka
+- Wymagają szczególnej uwagi i zgodności z przepisami AI Act
+- Decyzje podejmowane przez AI muszą być transparentne i możliwe do wyjaśnienia
+
+2.2. Wymagania dla systemów AI w rekrutacji:
+- Systemy AI muszą być:
+  * Przejrzyste - kandydaci muszą być informowani o użyciu AI
+  * Sprawiedliwe - nie mogą dyskryminować kandydatów
+  * Niezawodne - muszą działać poprawnie i bezpiecznie
+  * Nadzorowane przez człowieka - ostateczne decyzje podejmuje człowiek
+
+2.3. Informowanie kandydatów o użyciu AI:
+- Kandydaci muszą być informowani, że:
+  * AI jest używane w procesie rekrutacji
+  * AI wspiera, ale nie zastępuje decyzji człowieka
+  * Ostateczne decyzje podejmują pracownicy HR
+- Informacja o użyciu AI musi być zawarta w komunikacjach z kandydatami
+
+2.4. Profilowanie i automatyczne podejmowanie decyzji:
+- Profilowanie kandydatów przez AI jest dozwolone, ale:
+  * Kandydat musi być o tym poinformowany
+  * Profilowanie nie może być jedyną podstawą decyzji
+  * Kandydat ma prawo do sprzeciwu wobec profilowania
+- Automatyczne podejmowanie decyzji (bez udziału człowieka) jest zabronione w rekrutacji
+
+2.5. Walidacja i korekta AI:
+- Wszystkie komunikaty generowane przez AI muszą być weryfikowane
+- Walidator AI sprawdza:
+  * Zgodność z faktami
+  * Etykę i profesjonalizm
+  * Brak dyskryminacji
+  * Zgodność z przepisami prawa
+- Jeśli walidacja nie przejdzie, komunikaty są poprawiane
+- Maksymalnie 3 iteracje walidacji i korekty
+
+3. PRAWA KANDYDATÓW
+
+3.1. Prawo do informacji:
+- Kandydat ma prawo wiedzieć:
+  * Jakie dane są przetwarzane
+  * W jakim celu
+  * Kto ma dostęp do danych
+  * Jak długo dane są przechowywane
+  * Jakie są jego prawa
+
+3.2. Prawo do dostępu:
+- Kandydat może zażądać kopii swoich danych
+- Odpowiedź musi być udzielona w ciągu 30 dni
+- Dane muszą być przekazane w czytelnej formie
+
+3.3. Prawo do sprostowania:
+- Kandydat może żądać poprawienia nieprawidłowych danych
+- Administrator musi poprawić dane niezwłocznie
+
+3.4. Prawo do usunięcia:
+- Kandydat może żądać usunięcia swoich danych
+- Administrator musi usunąć dane, chyba że:
+  * Wymagają tego przepisy prawa
+  * Dane są niezbędne do dochodzenia roszczeń
+  * Kandydat wyraził zgodę na przechowywanie
+
+3.5. Prawo do sprzeciwu:
+- Kandydat może sprzeciwić się przetwarzaniu danych
+- Administrator musi zaprzestać przetwarzania, chyba że:
+  * Występują ważne prawnie uzasadnione podstawy
+  * Przetwarzanie jest niezbędne do dochodzenia roszczeń
+
+3.6. Prawo do przenoszenia danych:
+- Kandydat może żądać przeniesienia danych do innego administratora
+- Dane muszą być przekazane w ustrukturyzowanym formacie
+
+4. ODPOWIEDZIALNOŚĆ I NADZÓR
+
+4.1. Inspektor Ochrony Danych (IOD):
+- IOD jest odpowiedzialny za:
+  * Nadzór nad przestrzeganiem RODO
+  * Informowanie o naruszeniach ochrony danych
+  * Współpracę z organem nadzorczym
+  * Doradztwo w zakresie ochrony danych
+
+4.2. Naruszenia ochrony danych:
+- W przypadku naruszenia ochrony danych:
+  * Należy niezwłocznie powiadomić IOD
+  * Jeśli naruszenie może powodować wysokie ryzyko, należy powiadomić kandydatów
+  * W ciągu 72 godzin należy zgłosić naruszenie do UODO
+
+4.3. Skargi i roszczenia:
+- Kandydat może wnieść skargę do UODO
+- Kandydat może dochodzić odszkodowania za naruszenie ochrony danych
+- Maksymalna kara za naruszenie RODO to 20 mln EUR lub 4% rocznego obrotu
+
+5. ZGODNOŚĆ Z PRZEPISAMI
+
+5.1. Dokumentacja:
+- Należy prowadzić dokumentację przetwarzania danych
+- Należy rejestrować wszystkie operacje na danych
+- Należy dokumentować decyzje dotyczące przetwarzania danych
+
+5.2. Audyty i kontrole:
+- Należy regularnie przeprowadzać audyty zgodności z RODO
+- Należy sprawdzać, czy systemy AI działają zgodnie z AI Act
+- Należy aktualizować procedury zgodnie z nowymi przepisami
+
+5.3. Szkolenia:
+- Pracownicy HR muszą być przeszkoleni w zakresie RODO i AI Act
+- Należy regularnie aktualizować wiedzę o przepisach
+- Należy dokumentować przeprowadzone szkolenia
+

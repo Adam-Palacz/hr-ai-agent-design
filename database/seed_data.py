@@ -8,16 +8,21 @@ sys.path.insert(0, str(PathLib(__file__).parent.parent))
 
 from database.models import (
     init_db, create_position, create_candidate,
-    CandidateStatus, RecruitmentStage, get_all_positions, get_all_candidates
+    CandidateStatus, RecruitmentStage, get_all_positions, get_all_candidates,
+    clear_database
 )
 from config.job_config import load_job_config, create_job_offer_from_config
 from core.logger import logger
 
 
-def seed_database():
+def seed_database(reset: bool = False):
     """Seed database with example positions and candidates."""
     # Initialize database
     init_db()
+
+    if reset:
+        logger.info("Reset flag detected: clearing database tables (without dropping)...")
+        clear_database(reset_autoincrement=True)
     
     logger.info("Seeding database with example data...")
     
@@ -286,5 +291,6 @@ Compensation:
 
 
 if __name__ == '__main__':
-    seed_database()
+    reset = "--reset" in sys.argv
+    seed_database(reset=reset)
 

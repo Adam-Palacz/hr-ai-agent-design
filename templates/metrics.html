@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metryki Systemu - HR</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f7fa;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        h1 {
+            color: #333;
+            font-size: 32px;
+        }
+        .nav-links {
+            display: flex;
+            gap: 15px;
+        }
+        .btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: background 0.3s;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover {
+            background: #5568d3;
+        }
+        .period-selector {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .period-selector select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+        .section-header {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .section-header h2 {
+            color: #333;
+            font-size: 24px;
+        }
+        .section-content {
+            padding: 30px;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        .metric-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .metric-label {
+            font-size: 14px;
+            color: #6c757d;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .metric-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #333;
+        }
+        .metric-unit {
+            font-size: 16px;
+            color: #6c757d;
+            margin-left: 5px;
+        }
+        .status-healthy {
+            color: #10b981;
+        }
+        .status-warning {
+            color: #f59e0b;
+        }
+        .status-error {
+            color: #ef4444;
+        }
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .table th, .table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+        }
+        .table tr:hover {
+            background: #f8f9fa;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .badge-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .badge-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .badge-danger {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Metryki Systemu</h1>
+            <div style="display: flex; gap: 15px; align-items: center;">
+                <div class="period-selector">
+                    <label for="days">Okres:</label>
+                    <select id="days" onchange="window.location.href='?days=' + this.value">
+                        <option value="7" {% if days == 7 %}selected{% endif %}>7 dni</option>
+                        <option value="30" {% if days == 30 %}selected{% endif %}>30 dni</option>
+                        <option value="90" {% if days == 90 %}selected{% endif %}>90 dni</option>
+                        <option value="365" {% if days == 365 %}selected{% endif %}>1 rok</option>
+                    </select>
+                </div>
+                <div class="nav-links">
+                    <a href="{{ url_for('index') }}" class="btn">🏠 Strona główna</a>
+                    <a href="{{ url_for('admin_panel') }}" class="btn">📊 Panel Admin</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Health -->
+        {% if metrics.system_health %}
+        <div class="section">
+            <div class="section-header">
+                <h2>💚 Zdrowie Systemu</h2>
+            </div>
+            <div class="section-content">
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">Status Systemu</div>
+                        <div class="metric-value status-{{ 'healthy' if metrics.system_health.system_status == 'healthy' else 'warning' }}">
+                            {{ metrics.system_health.system_status|upper }}
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Wszyscy Kandydaci</div>
+                        <div class="metric-value">{{ metrics.system_health.total_candidates }}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Aktywni Kandydaci</div>
+                        <div class="metric-value">{{ metrics.system_health.active_candidates }}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Odrzuceni</div>
+                        <div class="metric-value">{{ metrics.system_health.rejected_candidates }}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Zaakceptowani</div>
+                        <div class="metric-value">{{ metrics.system_health.accepted_candidates }}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Stanowiska</div>
+                        <div class="metric-value">{{ metrics.system_health.total_positions }}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Otwarte Tickety</div>
+                        <div class="metric-value">{{ metrics.system_health.open_tickets }}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Błędy Walidacji</div>
+                        <div class="metric-value status-{{ 'error' if metrics.system_health.total_validation_errors > 10 else 'healthy' }}">
+                            {{ metrics.system_health.total_validation_errors }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Feedback Metrics -->
+        {% if metrics.feedback %}
+        <div class="section">
+            <div class="section-header">
+                <h2>📧 Metryki Feedbacku</h2>
+            </div>
+            <div class="section-content">
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">Wygenerowane Feedbacki</div>
+                        <div class="metric-value">{{ metrics.feedback.total_feedback_generated }}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Błędy Walidacji</div>
+                        <div class="metric-value status-{{ 'error' if metrics.feedback.validation_errors > 0 else 'healthy' }}">
+                            {{ metrics.feedback.validation_errors }}
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Wskaźnik Sukcesu Walidacji</div>
+                        <div class="metric-value status-{{ 'healthy' if metrics.feedback.validation_success_rate >= 90 else 'warning' }}">
+                            {{ metrics.feedback.validation_success_rate }}<span class="metric-unit">%</span>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Feedbacki na Dzień</div>
+                        <div class="metric-value">{{ metrics.feedback.feedback_per_day }}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Wskaźnik Błędów</div>
+                        <div class="metric-value status-{{ 'error' if metrics.feedback.error_rate > 10 else 'healthy' }}">
+                            {{ metrics.feedback.error_rate }}<span class="metric-unit">%</span>
+                        </div>
+                    </div>
+                </div>
+                {% if metrics.feedback.validation_iterations_distribution %}
+                <h3 style="margin-top: 30px; margin-bottom: 15px;">Rozkład Iteracji Walidacji</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Iteracja</th>
+                            <th>Liczba</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for iteration, count in metrics.feedback.validation_iterations_distribution.items() %}
+                        <tr>
+                            <td>Iteracja {{ iteration }}</td>
+                            <td>{{ count }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Email Processing Metrics -->
+        {% if metrics.email_processing %}
+        <div class="section">
+            <div class="section-header">
+                <h2>📬 Metryki Przetwarzania Emaili</h2>
+            </div>
+            <div class="section-content">
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">Przetworzone Emaile</div>
+                        <div class="metric-value">{{ metrics.email_processing.total_emails_processed }}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Sklasyfikowane Emaile</div>
+                        <div class="metric-value">{{ metrics.email_processing.emails_classified }}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Sklasyfikowane Zapytania</div>
+                        <div class="metric-value">{{ metrics.email_processing.queries_classified }}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Odpowiedzi Wygenerowane</div>
+                        <div class="metric-value">{{ metrics.email_processing.queries_responded }}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Tickety HR</div>
+                        <div class="metric-value">{{ metrics.email_processing.hr_tickets_created }}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Tickety IOD</div>
+                        <div class="metric-value">{{ metrics.email_processing.iod_tickets_created }}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Emaile na Dzień</div>
+                        <div class="metric-value">{{ metrics.email_processing.emails_per_day }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- RAG Metrics -->
+        {% if metrics.rag %}
+        <div class="section">
+            <div class="section-header">
+                <h2>🔍 Metryki RAG</h2>
+            </div>
+            <div class="section-content">
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">Zapytania z RAG</div>
+                        <div class="metric-value">{{ metrics.rag.rag_queries }}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Bezpośrednie Odpowiedzi</div>
+                        <div class="metric-value">{{ metrics.rag.direct_answers }}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Wszystkie Zapytania</div>
+                        <div class="metric-value">{{ metrics.rag.total_queries }}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Wskaźnik Użycia RAG</div>
+                        <div class="metric-value">{{ metrics.rag.rag_usage_rate }}<span class="metric-unit">%</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Timing Metrics -->
+        {% if metrics.feedback and metrics.feedback.avg_generation_time_seconds %}
+        <div class="section">
+            <div class="section-header">
+                <h2>⏱️ Metryki Czasu Generowania</h2>
+            </div>
+            <div class="section-content">
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">Średni Czas Generowania</div>
+                        <div class="metric-value status-{{ 'healthy' if metrics.feedback.avg_generation_time_seconds < 30 else 'warning' }}">
+                            {{ metrics.feedback.avg_generation_time_seconds }}<span class="metric-unit">s</span>
+                        </div>
+                        <div style="font-size: 12px; color: #6c757d; margin-top: 5px;">
+                            ({{ metrics.feedback.avg_generation_time_minutes }} min)
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Odpowiedzi &lt; 30 sekund</div>
+                        <div class="metric-value status-{{ 'healthy' if metrics.feedback.responses_under_30_seconds_percent >= 90 else 'warning' }}">
+                            {{ metrics.feedback.responses_under_30_seconds_percent }}<span class="metric-unit">%</span>
+                        </div>
+                        <div style="font-size: 12px; color: #6c757d; margin-top: 5px;">
+                            {{ metrics.feedback.responses_under_30_seconds }} / {{ metrics.feedback.total_timing_measurements }}
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Cel: &lt; 30 sekund</div>
+                        <div class="metric-value status-{{ 'healthy' if metrics.feedback.responses_under_30_seconds_percent >= 90 else 'warning' }}">
+                            {% if metrics.feedback.responses_under_30_seconds_percent >= 90 %}
+                                ✅ Osiągnięto
+                            {% else %}
+                                ⚠️ Do poprawy
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Cost Metrics -->
+        {% if metrics.costs %}
+        <div class="section">
+            <div class="section-header">
+                <h2>💰 Metryki Kosztowe</h2>
+            </div>
+            <div class="section-content">
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">Całkowity Koszt ({{ metrics.period_days }} dni)</div>
+                        <div class="metric-value">{{ metrics.costs.total_cost_pln }}<span class="metric-unit"> PLN</span></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Średni Koszt na Feedback</div>
+                        <div class="metric-value status-{{ 'healthy' if metrics.costs.avg_cost_per_feedback_pln < 0.50 else 'warning' }}">
+                            {{ metrics.costs.avg_cost_per_feedback_pln }}<span class="metric-unit"> PLN</span>
+                        </div>
+                        <div style="font-size: 12px; color: #6c757d; margin-top: 5px;">
+                            Cel: &lt; 0,50 PLN
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Średni Koszt na Odpowiedź</div>
+                        <div class="metric-value">{{ metrics.costs.avg_cost_per_response_pln }}<span class="metric-unit"> PLN</span></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Średni Koszt na Dzień</div>
+                        <div class="metric-value">{{ metrics.costs.avg_cost_per_day_pln }}<span class="metric-unit"> PLN</span></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Całkowite Tokeny</div>
+                        <div class="metric-value">{{ metrics.costs.total_tokens|int }}<span class="metric-unit"> tokens</span></div>
+                        <div style="font-size: 12px; color: #6c757d; margin-top: 5px;">
+                            Input: {{ metrics.costs.total_input_tokens|int }} | Output: {{ metrics.costs.total_output_tokens|int }}
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Średnia Tokenów na Odpowiedź</div>
+                        <div class="metric-value">{{ metrics.costs.avg_tokens_per_response|int }}<span class="metric-unit"> tokens</span></div>
+                    </div>
+                </div>
+                
+                {% if metrics.costs.cost_by_agent %}
+                <h3 style="margin-top: 30px; margin-bottom: 15px;">Koszty według Typu Agenta</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Typ Agenta</th>
+                            <th>Koszt (PLN)</th>
+                            <th>Liczba Wywołań</th>
+                            <th>Średni Koszt (PLN)</th>
+                            <th>Tokeny Input</th>
+                            <th>Tokeny Output</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for agent_type, stats in metrics.costs.cost_by_agent.items() %}
+                        <tr>
+                            <td><strong>{{ agent_type }}</strong></td>
+                            <td>{{ stats.cost_pln }}</td>
+                            <td>{{ stats.count }}</td>
+                            <td>{{ stats.avg_cost_pln }}</td>
+                            <td>{{ stats.input_tokens }}</td>
+                            <td>{{ stats.output_tokens }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+                
+                <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; font-size: 14px; color: #6c757d;">
+                    <strong>Uwaga:</strong> Koszty są obliczane na podstawie przybliżonych cen Azure OpenAI (stan na grudzień 2025). 
+                    Rzeczywiste koszty mogą się różnić w zależności od deploymentu i aktualnych cen dostawcy.
+                    Dane kosztowe dostępne dla {{ metrics.costs.responses_with_cost_data }} z {{ metrics.costs.total_responses }} odpowiedzi.
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Agent Performance -->
+        {% if metrics.agent_performance %}
+        <div class="section">
+            <div class="section-header">
+                <h2>🤖 Wydajność Agentów AI</h2>
+            </div>
+            <div class="section-content">
+                <div class="metric-card" style="margin-bottom: 20px;">
+                    <div class="metric-label">Wszystkie Wywołania Agentów</div>
+                    <div class="metric-value">{{ metrics.agent_performance.total_agent_calls }}</div>
+                </div>
+                {% if metrics.agent_performance.agent_statistics %}
+                <h3 style="margin-bottom: 15px;">Statystyki według Typu Agenta</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Typ Agenta</th>
+                            <th>Liczba Wywołań</th>
+                            <th>Średnio na Dzień</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for agent_type, stats in metrics.agent_performance.agent_statistics.items() %}
+                        <tr>
+                            <td><strong>{{ agent_type }}</strong></td>
+                            <td>{{ stats.count }}</td>
+                            <td>{{ stats.avg_per_day }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div style="text-align: center; color: #6c757d; margin-top: 30px; padding: 20px;">
+            <p>Metryki wygenerowane: {{ metrics.generated_at[:19] }}</p>
+            <p>Okres analizy: {{ metrics.period_days }} dni</p>
+        </div>
+    </div>
+</body>
+</html>
+

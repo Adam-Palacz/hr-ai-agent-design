@@ -1,12 +1,6 @@
 """Prompt template for CV parsing agent."""
-try:
-    from langchain_core.prompts import PromptTemplate
-except ImportError:
-    from langchain.prompts import PromptTemplate
 
-CV_PARSING_PROMPT = PromptTemplate(
-    input_variables=["cv_text"],
-    template="""You are an expert CV parser. Your task is to extract and structure all information from a CV document.
+CV_PARSING_PROMPT_TEMPLATE = """You are an expert CV parser. Your task is to extract and structure all information from a CV document.
 
 Extract the following information from the CV text provided below:
 
@@ -112,5 +106,11 @@ Language objects must have:
 
 Return ONLY valid JSON matching this exact structure. Do not nest personal_information or use alternative field names.
 """
-)
+
+# Simple wrapper class to maintain compatibility with .format() calls
+class CV_PARSING_PROMPT:
+    def format(self, **kwargs):
+        return CV_PARSING_PROMPT_TEMPLATE.format(**kwargs)
+
+CV_PARSING_PROMPT = CV_PARSING_PROMPT()
 

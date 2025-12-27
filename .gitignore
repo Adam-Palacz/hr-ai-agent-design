@@ -40,7 +40,12 @@ feedback_*.txt
 example_cv.pdf
 *.db
 
+# ChromaDB
+chroma_db/
+*.chroma
+
 # OS
 .DS_Store
 Thumbs.db
 
+_ksiazka

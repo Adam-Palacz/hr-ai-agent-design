@@ -1,15 +1,6 @@
 """Prompt template for feedback validation."""
-try:
-    from langchain_core.prompts import PromptTemplate
-except ImportError:
-    try:
-        from langchain.prompts import PromptTemplate
-    except ImportError:
-        from langchain_core.prompts.prompt import PromptTemplate
 
-VALIDATION_PROMPT = PromptTemplate(
-    input_variables=["html_content", "cv_data", "hr_feedback", "job_offer"],
-    template="""You are an ethical AI validator responsible for reviewing candidate feedback emails before they are sent.
+VALIDATION_PROMPT_TEMPLATE = """You are an ethical AI validator responsible for reviewing candidate feedback emails before they are sent.
 
 Your task is to validate the following feedback email to ensure it is:
 1. FACTUALLY ACCURATE - All information matches the candidate's CV and HR feedback
@@ -83,5 +74,11 @@ Remember: Feedback that uses soft, observational language ("na podstawie CV", "C
 
 {format_instructions}
 """
-)
+
+# Simple wrapper class to maintain compatibility with .format() calls
+class VALIDATION_PROMPT:
+    def format(self, **kwargs):
+        return VALIDATION_PROMPT_TEMPLATE.format(**kwargs)
+
+VALIDATION_PROMPT = VALIDATION_PROMPT()
 

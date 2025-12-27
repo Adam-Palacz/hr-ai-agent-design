@@ -1,0 +1,116 @@
+POLITYKA REKRUTACJI FIRMY
+
+1. PROCES REKRUTACJI
+
+1.1. Etapy rekrutacji:
+- Pierwsza selekcja (screening) - weryfikacja CV i podstawowych wymagań
+- Rozmowa HR - ocena kompetencji miękkich, motywacji, dopasowania kulturowego
+- Ocena techniczna - testy, zadania praktyczne, rozmowy techniczne (dla stanowisk technicznych)
+- Weryfikacja wiedzy - sprawdzenie kompetencji merytorycznych
+- Rozmowa finalna - spotkanie z przełożonym, negocjacje warunków
+
+1.2. Zasady komunikacji z kandydatami:
+- Wszystkie komunikaty muszą być profesjonalne, przyjazne i empatyczne
+- Odpowiedzi na aplikacje w ciągu 5 dni roboczych
+- Informacja zwrotna zawsze zawiera konstruktywne uwagi
+- Unikamy słów "odrzucenie", "odmowa" - używamy łagodniejszych sformułowań
+- Standardowa formuła: "Z przykrością informujemy, że zdecydowaliśmy się procedować z innymi kandydatami"
+
+1.3. Zgoda na inne rekrutacje:
+- Kandydaci mogą wyrazić zgodę na rozważenie ich kandydatury w innych rekrutacjach
+- Zgoda jest dobrowolna i można ją wycofać w każdej chwili
+- Jeśli kandydat wyraził zgodę, informujemy go o nowych, odpowiednich ofertach
+- Jeśli kandydat nie wyraził zgody, nie rozważamy go w innych rekrutacjach
+
+2. OCENA KANDYDATÓW
+
+2.1. Kryteria oceny:
+- Doświadczenie zawodowe i kompetencje merytoryczne
+- Umiejętności miękkie (komunikacja, praca w zespole, rozwiązywanie problemów)
+- Dopasowanie kulturowe do wartości firmy
+- Potencjał rozwojowy
+- Motywacja i zaangażowanie
+
+2.2. Notatki HR:
+- Wszystkie notatki z rozmów są zapisywane w systemie
+- Notatki zawierają obserwacje, mocne strony i obszary do poprawy
+- Notatki są dostępne dla zespołu rekrutacyjnego na wszystkich etapach
+- Notatki są wykorzystywane do generowania feedbacku dla kandydatów
+
+2.3. Feedback dla kandydatów:
+- Feedback jest zawsze konstruktywny i wspierający
+- Zawiera mocne strony kandydata
+- Wskazuje obszary do rozwoju w sposób empatyczny
+- Zachęca do dalszego rozwoju zawodowego
+- Zawsze kończy się pozytywnym, motywującym komunikatem
+
+3. DECYZJE REKRUTACYJNE
+
+3.1. Akceptacja kandydata:
+- Kandydat przechodzi do kolejnego etapu rekrutacji
+- Nie generujemy feedbacku - kandydat otrzyma informację po zakończeniu procesu
+- Aktualizujemy status w systemie
+
+3.2. Odrzucenie kandydata:
+- Generujemy szczegółowy feedback używając AI
+- Feedback jest weryfikowany przez walidatora AI pod kątem:
+  * Zgodności z faktami
+  * Etyki i profesjonalizmu
+  * Braku dyskryminacji
+- Wysyłamy email z feedbackiem do kandydata
+- Zapisujemy informację o wysłanym feedbacku w systemie
+
+4. ZARZĄDZANIE DANYMI KANDYDATÓW
+
+4.1. Przechowywanie danych:
+- Wszystkie dane kandydatów są przechowywane zgodnie z RODO
+- CV są przechowywane w bezpiecznym systemie
+- Dane są dostępne tylko dla uprawnionych pracowników HR
+
+4.2. Retencja danych:
+- Dane kandydatów są przechowywane przez okres wymagany prawem
+- Po zakończeniu procesu rekrutacji, dane mogą być usunięte na żądanie kandydata
+- Jeśli kandydat wyraził zgodę na inne rekrutacje, dane mogą być przechowywane dłużej
+
+5. ZASADY ETYCZNE
+
+5.1. Równość szans:
+- Wszyscy kandydaci są traktowani jednakowo
+- Nie dyskryminujemy ze względu na płeć, wiek, pochodzenie, wyznanie, orientację seksualną
+- Decyzje opieramy wyłącznie na kompetencjach i dopasowaniu do stanowiska
+
+5.2. Transparentność:
+- Proces rekrutacji jest przejrzysty
+- Kandydaci są informowani o statusie swojej aplikacji
+- Feedback jest szczegółowy i konstruktywny
+
+5.3. Poufność:
+- Wszystkie informacje o kandydatach są poufne
+- Nie udostępniamy danych kandydatów osobom trzecim bez zgody
+- Szanujemy prywatność kandydatów
+
+6. WYKORZYSTANIE AI W REKRUTACJI
+
+6.1. Asystent AI:
+- AI wspiera proces rekrutacji, ale nie podejmuje decyzji
+- Wszystkie decyzje są podejmowane przez pracowników HR
+- AI generuje feedback, który jest weryfikowany przed wysłaniem
+- Informacja o użyciu AI jest zawsze zawarta w emailach
+
+6.2. Walidacja AI:
+- Wszystkie komunikaty generowane przez AI są weryfikowane
+- Walidator sprawdza zgodność z faktami, etyką i profesjonalizmem
+- Jeśli walidacja nie przejdzie, feedback jest poprawiany przez korektora AI
+- Maksymalnie 3 iteracje walidacji i korekty
+
+7. KOMUNIKACJA ZEWNĘTRZNA
+
+7.1. Podpis w emailach:
+- Wszystkie emaile zewnętrzne kończą się podpisem: "Z wyrazami szacunku\n\nDział HR"
+- Informacja o AI jest zawsze zawarta w stopce: "Informacja ta została wygenerowana automatycznie przez Asystenta AI działu rekrutacji, jednakże decyzje dotyczące zatrudnienia zostały podjęte przez pracownika działu HR."
+
+7.2. Zgoda na inne rekrutacje:
+- Jeśli kandydat nie wyraził zgody, informujemy go o możliwości zmiany decyzji
+- Jeśli kandydat wyraził zgodę, informujemy go, że będziemy go rozważać w przyszłych rekrutacjach
+- Kandydat może w każdej chwili zmienić swoją decyzję, odpowiadając na email
+

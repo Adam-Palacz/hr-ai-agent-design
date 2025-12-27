@@ -61,7 +61,7 @@ class Candidate:
                  status: CandidateStatus = CandidateStatus.IN_PROGRESS,
                  stage: RecruitmentStage = RecruitmentStage.INITIAL_SCREENING,
                  cv_path: Optional[str] = None,
-                 consent_for_other_positions: Optional[bool] = None,
+                 consent_for_other_positions: bool = False,
                  created_at: Optional[datetime] = None,
                  updated_at: Optional[datetime] = None):
         self.id = id
@@ -72,7 +72,7 @@ class Candidate:
         self.status = status
         self.stage = stage
         self.cv_path = cv_path
-        self.consent_for_other_positions = consent_for_other_positions
+        self.consent_for_other_positions = bool(consent_for_other_positions)
         self.created_at = created_at or datetime.now()
         self.updated_at = updated_at or datetime.now()
     
@@ -346,6 +346,13 @@ def init_db():
     except sqlite3.OperationalError:
         # Column already exists, ignore
         pass
+
+    # Normalize existing data: no "unknown" state in UI -> treat NULL as "Nie" (0)
+    try:
+        cursor.execute('UPDATE candidates SET consent_for_other_positions = 0 WHERE consent_for_other_positions IS NULL')
+    except sqlite3.OperationalError:
+        # Column may not exist yet in some edge cases; ignore
+        pass
     
     # Create feedback_emails table
     cursor.execute('''
@@ -432,6 +439,59 @@ def init_db():
     logger.info(f"Database initialized at: {db_path}")
 
 
+def clear_database(reset_autoincrement: bool = True) -> None:
+    """
+    Clear (DELETE) all rows from application tables WITHOUT dropping tables.
+
+    This is meant for dev/demo usage to quickly reset the database content while
+    keeping the schema intact.
+
+    Args:
+        reset_autoincrement: If True, also resets SQLite AUTOINCREMENT counters
+            by clearing rows from sqlite_sequence for known tables.
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Ensure schema exists
+    init_db()
+
+    # FK-safe delete order (children -> parents)
+    tables_in_delete_order = [
+        "model_responses",
+        "validation_errors",
+        "hr_notes",
+        "feedback_emails",
+        "tickets",
+        "candidates",
+        "positions",
+    ]
+
+    try:
+        # Temporarily disable FK checks to avoid issues with partial/inconsistent data.
+        cursor.execute("PRAGMA foreign_keys = OFF;")
+        for table in tables_in_delete_order:
+            cursor.execute(f"DELETE FROM {table};")
+
+        if reset_autoincrement:
+            # sqlite_sequence exists only if any table uses AUTOINCREMENT.
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='sqlite_sequence';"
+            )
+            if cursor.fetchone():
+                for table in tables_in_delete_order:
+                    cursor.execute("DELETE FROM sqlite_sequence WHERE name = ?;", (table,))
+
+        conn.commit()
+        logger.info("Database cleared (tables kept).")
+    finally:
+        try:
+            cursor.execute("PRAGMA foreign_keys = ON;")
+        except Exception:
+            pass
+        conn.close()
+
+
 def get_all_candidates() -> List[Candidate]:
     """Get all candidates with their positions."""
     conn = get_db()
@@ -446,7 +506,8 @@ def get_all_candidates() -> List[Candidate]:
         status = CandidateStatus(row['status']) if row['status'] else CandidateStatus.IN_PROGRESS
         stage = RecruitmentStage(row['stage']) if row['stage'] else RecruitmentStage.INITIAL_SCREENING
         
-        consent_value = None
+        # Treat NULL as False ("Nie") to avoid tri-state
+        consent_value = False
         if 'consent_for_other_positions' in row.keys() and row['consent_for_other_positions'] is not None:
             consent_value = bool(row['consent_for_other_positions'])
         
@@ -482,7 +543,7 @@ def get_candidate_by_email(email: str) -> Optional[Candidate]:
     status = CandidateStatus(row['status']) if row['status'] else CandidateStatus.IN_PROGRESS
     stage = RecruitmentStage(row['stage']) if row['stage'] else RecruitmentStage.INITIAL_SCREENING
     
-    consent_value = None
+    consent_value = False
     if 'consent_for_other_positions' in row.keys() and row['consent_for_other_positions'] is not None:
         consent_value = bool(row['consent_for_other_positions'])
     
@@ -516,7 +577,7 @@ def get_candidate_by_id(candidate_id: int) -> Optional[Candidate]:
     status = CandidateStatus(row['status']) if row['status'] else CandidateStatus.IN_PROGRESS
     stage = RecruitmentStage(row['stage']) if row['stage'] else RecruitmentStage.INITIAL_SCREENING
     
-    consent_value = None
+    consent_value = False
     if 'consent_for_other_positions' in row.keys() and row['consent_for_other_positions'] is not None:
         consent_value = bool(row['consent_for_other_positions'])
     
@@ -549,9 +610,8 @@ def create_candidate(
     conn = get_db()
     cursor = conn.cursor()
     
-    consent_int = None
-    if consent_for_other_positions is not None:
-        consent_int = 1 if consent_for_other_positions else 0
+    # No tri-state: treat None as False ("Nie")
+    consent_int = 1 if consent_for_other_positions else 0
     
     cursor.execute('''
         INSERT INTO candidates (first_name, last_name, email, position_id, status, stage, cv_path, consent_for_other_positions)

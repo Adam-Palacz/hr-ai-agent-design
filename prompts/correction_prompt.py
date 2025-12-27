@@ -1,15 +1,6 @@
 """Prompt template for feedback correction based on validation feedback."""
-try:
-    from langchain_core.prompts import PromptTemplate
-except ImportError:
-    try:
-        from langchain.prompts import PromptTemplate
-    except ImportError:
-        from langchain_core.prompts.prompt import PromptTemplate
 
-CORRECTION_PROMPT = PromptTemplate(
-    input_variables=["original_html", "validation_reasoning", "issues_found", "ethical_concerns", "factual_errors", "cv_data", "hr_feedback", "job_offer"],
-    template="""You are an AI assistant responsible for correcting candidate feedback emails based on validation feedback.
+CORRECTION_PROMPT_TEMPLATE = """You are an AI assistant responsible for correcting candidate feedback emails based on validation feedback.
 
 Your task is to fix the feedback email by addressing all issues identified by the validator while maintaining the original intent and structure.
 
@@ -70,5 +61,11 @@ IMPORTANT OUTPUT REQUIREMENTS:
 
 {format_instructions}
 """
-)
+
+# Simple wrapper class to maintain compatibility with .format() calls
+class CORRECTION_PROMPT:
+    def format(self, **kwargs):
+        return CORRECTION_PROMPT_TEMPLATE.format(**kwargs)
+
+CORRECTION_PROMPT = CORRECTION_PROMPT()
 

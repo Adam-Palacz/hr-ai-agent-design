@@ -208,7 +208,7 @@
                                     } %}
                                     {{ stage_display.get(row[column], row[column]) }}
                                 {% elif column == 'consent_for_other_positions' %}
-                                    {% if row[column] == 1 %}✅ Tak{% elif row[column] == 0 %}❌ Nie{% else %}❓ Nie określono{% endif %}
+                                    {% if row[column] == 1 %}✅ Tak{% else %}❌ Nie{% endif %}
                                 {% else %}
                                     {{ row[column] }}
                                 {% endif %}

@@ -146,6 +146,9 @@ class EmailMonitor:
                     new_msg_nums = [n for n in all_msg_nums if n > self.last_msg_num]
 
                     if new_msg_nums:
+                        # Track successfully processed message numbers
+                        successfully_processed = []
+                        
                         for msg_num in new_msg_nums:
                             try:
                                 # Fetch full message by sequence number
@@ -179,21 +182,25 @@ class EmailMonitor:
 
                                 if success:
                                     logger.info(f"Email seq={msg_num} processed successfully")
+                                    # Only track successfully processed messages
+                                    successfully_processed.append(msg_num)
                                 else:
                                     logger.warning(
                                         f"Failed to route email seq={msg_num} from {email_data.get('from_email')}"
                                     )
+                                    # Don't add to successfully_processed - will retry next cycle
 
                             except Exception as e:
                                 logger.error(f"Error processing email seq={msg_num}: {str(e)}", exc_info=True)
+                                # Don't add to successfully_processed - will retry next cycle
 
-                        # Update last_msg_num to the newest processed message
-                        # Use max of processed messages, not all messages, to avoid skipping
-                        if new_msg_nums:
-                            self.last_msg_num = max(new_msg_nums)
-                        else:
-                            # If no new messages, keep current last_msg_num
-                            self.last_msg_num = max(all_msg_nums) if all_msg_nums else self.last_msg_num
+                        # Update last_msg_num only to the highest successfully processed message
+                        # This ensures we don't skip messages that failed to process
+                        if successfully_processed:
+                            self.last_msg_num = max(successfully_processed)
+                            logger.debug(f"Updated last_msg_num to {self.last_msg_num} ({len(successfully_processed)} messages processed)")
+                        # If no messages were successfully processed, keep current last_msg_num
+                        # This allows retry of failed messages in next cycle
                 
                 # Disconnect
                 self.listener.disconnect()

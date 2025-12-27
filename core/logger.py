@@ -4,7 +4,12 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from config.settings import settings
+try:
+    # Optional dependency chain (pydantic_settings). For lightweight scripts (e.g. DB seed),
+    # we want logging to work even if settings cannot be imported.
+    from config.settings import settings  # type: ignore
+except Exception:  # pragma: no cover
+    settings = None  # type: ignore
 
 
 def setup_logger(
@@ -26,7 +31,12 @@ def setup_logger(
     logger = logging.getLogger(name)
     
     # Set log level
-    level = log_level or settings.log_level
+    if log_level:
+        level = log_level
+    elif settings is not None and getattr(settings, "log_level", None):
+        level = settings.log_level
+    else:
+        level = "INFO"
     logger.setLevel(getattr(logging, level.upper(), logging.INFO))
     
     # Avoid duplicate handlers

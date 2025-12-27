@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     openai_feedback_temperature: float = 0.7
     openai_timeout: int = 600
     openai_max_retries: int = 2
-
+    
     # OCR Configuration
     use_ocr: bool = False
     ocr_timeout: int = 600
