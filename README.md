@@ -195,6 +195,25 @@ BOOK/
 
 ---
 
+## Testing
+
+Tests use **pytest** and a temporary database (no impact on your real data).
+
+```bash
+pip install -r requirements.txt   # includes pytest, pytest-cov
+pytest
+```
+
+Run with coverage:
+
+```bash
+pytest --cov=app --cov=config --cov=database --cov-report=term-missing
+```
+
+Or from project root: `python -m pytest tests/ -v`
+
+---
+
 ## Pre-commit (optional)
 
 To run Black, Ruff, and general hooks before each commit:
