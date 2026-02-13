@@ -28,7 +28,18 @@ Web application for HR teams to manage recruitment: review CVs, track candidates
 
 ## Quick start
 
-### 1. Clone and install
+**One-command run (after cloning):**
+
+- **Windows (PowerShell):** `.\quickstart.ps1`
+- **Linux/macOS (Bash):** `./quickstart.sh` (or `bash quickstart.sh`)
+
+These scripts create a virtual environment (if missing), install dependencies, copy `.env.example` to `.env` on first run (then you edit `.env` and run again), and start the app.
+
+---
+
+### Manual setup
+
+#### 1. Clone and install
 
 ```bash
 git clone <repository-url>
