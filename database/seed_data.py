@@ -1,11 +1,10 @@
 """Seed database with example data."""
 
-from pathlib import Path
 import sys
-from pathlib import Path as PathLib
+from pathlib import Path
 
 # Add parent directory to path
-sys.path.insert(0, str(PathLib(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from database.models import (
     init_db,

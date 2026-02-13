@@ -88,5 +88,8 @@ elif settings.email_monitor_enabled and settings.email_username and settings.ema
 register_all_routes(app)
 
 if __name__ == "__main__":
-    logger.info("Starting Flask application")
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    _debug = os.getenv("FLASK_DEBUG", "false").lower() in ("1", "true", "yes")
+    _host = os.getenv("FLASK_HOST", "127.0.0.1")
+    _port = int(os.getenv("FLASK_PORT", "5000"))
+    logger.info("Starting Flask application (debug=%s, host=%s, port=%s)", _debug, _host, _port)
+    app.run(debug=_debug, host=_host, port=_port)

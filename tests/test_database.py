@@ -32,7 +32,11 @@ def test_create_and_get_position():
 
 def test_create_and_get_candidate():
     """Create a candidate and retrieve by id."""
-    position_id = 1
+    pos = create_position(
+        title="Test Role",
+        company="Test Company",
+        description="For test_create_and_get_candidate",
+    )
     first_name = "Jan"
     last_name = "Testowy"
     email = "jan.test@example.com"
@@ -40,7 +44,7 @@ def test_create_and_get_candidate():
         first_name=first_name,
         last_name=last_name,
         email=email,
-        position_id=position_id,
+        position_id=pos.id,
         status=CandidateStatus.IN_PROGRESS,
         stage=RecruitmentStage.INITIAL_SCREENING,
         consent_for_other_positions=False,

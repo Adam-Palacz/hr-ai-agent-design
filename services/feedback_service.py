@@ -151,16 +151,11 @@ class FeedbackService:
                 f"Feedback generation completed for: {cv_data.full_name} (total: {total_duration:.2f}s, validated: {is_validated})"
             )
 
-            # Return feedback with validation status
+            if save_to_file and feedback.html_content:
+                html_path = self._save_feedback_html(feedback, cv_data, output_dir)
+                logger.info(f"HTML feedback saved to: {html_path}")
+
             return feedback, is_validated, validation_error_info
-
-            if save_to_file:
-                # Save HTML feedback (only format we support now)
-                if feedback.html_content:
-                    html_path = self._save_feedback_html(feedback, cv_data, output_dir)
-                    logger.info(f"HTML feedback saved to: {html_path}")
-
-            return feedback
 
         except Exception as e:
             error_msg = f"Failed to generate feedback: {str(e)}"
@@ -374,7 +369,9 @@ class FeedbackService:
         return output_path
 
     def get_feedback_html(
-        self, feedback: CandidateFeedback, consent_for_other_positions: bool = None
+        self,
+        feedback: CandidateFeedback,
+        consent_for_other_positions: Optional[bool] = None,
     ) -> str:
         """
         Get HTML formatted version of feedback.

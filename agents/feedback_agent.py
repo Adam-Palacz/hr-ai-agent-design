@@ -89,6 +89,7 @@ class FeedbackAgent(BaseAgent):
         )
 
         # Call Azure OpenAI chat completions
+        raw_text = None
         try:
             logger.info(
                 f"Generating feedback for candidate: {candidate_name} (stage: {recruitment_stage_str})"
@@ -133,15 +134,17 @@ class FeedbackAgent(BaseAgent):
             logger.info(f"Feedback generated successfully for {candidate_name}")
             return feedback
         except Exception as e:
-            # Fallback: try to parse whatever we got in `raw_text`
-            try:
-                feedback = self._parse_feedback_from_text(raw_text)
-                logger.warning("Feedback parsed using fallback parser after initial error.")
-                return feedback
-            except Exception as final_error:
-                raise Exception(
-                    f"Failed to parse feedback: {str(final_error)}. Original error: {str(e)}"
-                )
+            # Fallback: try to parse whatever we got in `raw_text` (only if assigned)
+            if raw_text is not None:
+                try:
+                    feedback = self._parse_feedback_from_text(raw_text)
+                    logger.warning("Feedback parsed using fallback parser after initial error.")
+                    return feedback
+                except Exception as final_error:
+                    raise Exception(
+                        f"Failed to parse feedback: {str(final_error)}. Original error: {str(e)}"
+                    ) from e
+            raise
 
     def _parse_feedback_from_text(self, text: str) -> CandidateFeedback:
         """

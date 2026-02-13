@@ -136,7 +136,7 @@ class MetricsService:
             total_feedback = len(recent_feedback)
             total_errors = len(recent_errors)
             validation_success_rate = (
-                (total_feedback - total_errors) / total_feedback * 100
+                max(total_feedback - total_errors, 0) / total_feedback * 100
                 if total_feedback > 0
                 else 100.0
             )
