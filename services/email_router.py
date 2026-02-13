@@ -257,10 +257,10 @@ In-Reply-To: {email_data.get('in_reply_to', 'Brak')}
                 reply_to=from_email
             )
             
-            if success:
-                # Send acknowledgment to original sender (only if not already sent)
-                ack_subject = "Re: " + email_subject
-                ack_body = """
+            # Send acknowledgment to original sender (always, even if forwarding to IOD failed)
+            # Ticket was created, so candidate should be notified
+            ack_subject = "Re: " + email_subject
+            ack_body = """
 Dziękujemy za kontakt.
 
 Twoja wiadomość została przekazana do działu Inspektora Ochrony Danych (IOD) w celu rozpatrzenia.
@@ -271,16 +271,25 @@ Z wyrazami szacunku
 
 Dział HR
 """
-                self._send_email(
-                    to_email=from_email,
-                    subject=ack_subject,
-                    body=ack_body
-                )
-                logger.info(f"Email routed to IOD and acknowledgment sent to {from_email}")
-            else:
-                logger.warning(f"Failed to send email to IOD for {from_email}, acknowledgment not sent")
+            ack_success = self._send_email(
+                to_email=from_email,
+                subject=ack_subject,
+                body=ack_body
+            )
             
-            return success
+            if success:
+                if ack_success:
+                    logger.info(f"Email routed to IOD and acknowledgment sent to {from_email}")
+                else:
+                    logger.warning(f"Email routed to IOD, but failed to send acknowledgment to {from_email}")
+            else:
+                if ack_success:
+                    logger.warning(f"Failed to send email to IOD for {from_email}, but acknowledgment sent to candidate")
+                else:
+                    logger.error(f"Failed to send email to IOD and acknowledgment to {from_email}")
+            
+            # Return True if either forwarding or acknowledgment succeeded (ticket was created)
+            return success or ack_success
             
         except Exception as e:
             logger.error(f"Error routing email to IOD: {str(e)}", exc_info=True)
@@ -423,16 +432,38 @@ Temat: {email_data.get('subject', 'Brak tematu')}
                 azure_deployment = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-3-small")
                 azure_api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
                 
+                # Prefer Qdrant server over local path (avoids locking issues)
+                qdrant_host = os.getenv("QDRANT_HOST", "qdrant")  # Default to service name in Docker
+                qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
+                qdrant_path = os.getenv("QDRANT_PATH")  # Optional, only if server not available
+                
                 if azure_api_key:
-                    self.rag_db = QdrantRAG(
-                        collection_name="recruitment_knowledge_base",
-                        use_azure_openai=True,
-                        azure_endpoint=azure_endpoint,
-                        azure_api_key=azure_api_key,
-                        azure_deployment=azure_deployment,
-                        azure_api_version=azure_api_version,
-                        qdrant_path="./qdrant_db"
-                    )
+                    # Try server first, fallback to local path
+                    if qdrant_host:
+                        self.rag_db = QdrantRAG(
+                            collection_name="recruitment_knowledge_base",
+                            use_azure_openai=True,
+                            azure_endpoint=azure_endpoint,
+                            azure_api_key=azure_api_key,
+                            azure_deployment=azure_deployment,
+                            azure_api_version=azure_api_version,
+                            qdrant_host=qdrant_host,
+                            qdrant_port=qdrant_port
+                        )
+                    elif qdrant_path:
+                        self.rag_db = QdrantRAG(
+                            collection_name="recruitment_knowledge_base",
+                            use_azure_openai=True,
+                            azure_endpoint=azure_endpoint,
+                            azure_api_key=azure_api_key,
+                            azure_deployment=azure_deployment,
+                            azure_api_version=azure_api_version,
+                            qdrant_path=qdrant_path
+                        )
+                    else:
+                        logger.warning("Neither QDRANT_HOST nor QDRANT_PATH set, RAG unavailable")
+                        return None
+                    
                     logger.info("RAG database initialized")
                 else:
                     logger.warning("Azure OpenAI API key not set, RAG unavailable")
@@ -478,9 +509,18 @@ Temat: {email_data.get('subject', 'Brak tematu')}
             
             logger.info(f"Query classified as: {action} (confidence: {confidence:.2f}, reasoning: {reasoning})")
             
-            # KRYTYCZNA WALIDACJA: Jeśli confidence jest za niskie, przekaż do HR (próg 0.7)
-            if confidence < 0.7:
-                logger.warning(f"Confidence ({confidence:.2f}) < 0.70, forwarding to HR instead of {action}")
+            # KRYTYCZNA WALIDACJA: Różne progi dla różnych akcji
+            # Dla rag_answer: pozwalamy spróbować nawet przy niższej confidence (0.5+), bo RAG może znaleźć odpowiedź
+            # Dla direct_answer: wymagamy wyższej confidence (0.85+)
+            # Dla forward_to_hr lub confidence < 0.5: zawsze przekazujemy do HR
+            if action == 'rag_answer' and confidence < 0.5:
+                logger.warning(f"Confidence ({confidence:.2f}) < 0.50 for rag_answer, forwarding to HR instead")
+                action = 'forward_to_hr'
+                reasoning = f"Poziom pewności ({confidence:.2f}) jest zbyt niski dla rag_answer. {reasoning}"
+            elif action != 'rag_answer' and confidence < 0.7:
+                # Dla direct_answer i forward_to_hr: próg 0.7
+                if action == 'direct_answer':
+                    logger.warning(f"Confidence ({confidence:.2f}) < 0.70 for direct_answer, forwarding to HR instead")
                 action = 'forward_to_hr'
                 reasoning = f"Poziom pewności ({confidence:.2f}) jest mniejszy niż wymagany (0.70). {reasoning}"
             
@@ -493,11 +533,11 @@ Temat: {email_data.get('subject', 'Brak tematu')}
             elif action == 'direct_answer':
                 # Generate response from basic knowledge
                 # DODATKOWA WALIDACJA: Sprawdź confidence jeszcze raz przed odpowiedzią
-                if confidence < 1.0:
-                    logger.warning(f"Confidence ({confidence:.2f}) < 1.0 for direct_answer, forwarding to HR")
+                if confidence < 0.85:
+                    logger.warning(f"Confidence ({confidence:.2f}) < 0.85 for direct_answer, forwarding to HR")
                     return self._route_to_hr(email_data)
                 
-                logger.info("Generating direct answer from basic knowledge (confidence = 1.0)")
+                logger.info(f"Generating direct answer from basic knowledge (confidence = {confidence:.2f})")
                 response = self.query_responder.generate_response(
                     email_subject, email_body, from_email, rag_context=None
                 )
@@ -523,13 +563,9 @@ Temat: {email_data.get('subject', 'Brak tematu')}
                 return success
             
             elif action == 'rag_answer':
-                # DODATKOWA WALIDACJA: Sprawdź confidence jeszcze raz przed odpowiedzią
-                if confidence < 1.0:
-                    logger.warning(f"Confidence ({confidence:.2f}) < 1.0 for rag_answer, forwarding to HR")
-                    return self._route_to_hr(email_data)
-                
-                # Use RAG to find relevant context, then generate response
-                logger.info("Generating answer using RAG (confidence = 1.0)")
+                # Dla rag_answer: pozwalamy spróbować jeśli confidence >= 0.5 (już zwalidowane wcześniej)
+                # RAG może znaleźć odpowiedź nawet jeśli klasyfikacja była niepewna
+                logger.info(f"Generating answer using RAG (confidence = {confidence:.2f})")
                 rag_db = self._get_rag_db()
                 
                 if not rag_db:
@@ -918,13 +954,42 @@ In-Reply-To: {email_data.get('in_reply_to', 'Brak')}
                 reply_to=from_email
             )
             
-            if success:
-                if candidate_info:
-                    logger.info(f"Email routed to HR with candidate info: {from_email} (candidate ID: {candidate.id if candidate else 'N/A'})")
-                else:
-                    logger.info(f"Email routed to HR: {from_email}")
+            # Send acknowledgment to original sender (always, even if forwarding to HR failed)
+            # Ticket was created, so candidate should be notified
+            ack_subject = "Re: " + email_subject
+            ack_body = """
+Dziękujemy za kontakt.
+
+Twoja wiadomość została przekazana do działu HR w celu rozpatrzenia.
+
+Otrzymasz odpowiedź w najkrótszym możliwym terminie.
+
+Z wyrazami szacunku
+
+Dział HR
+"""
+            ack_success = self._send_email(
+                to_email=from_email,
+                subject=ack_subject,
+                body=ack_body
+            )
             
-            return success
+            if success:
+                if ack_success:
+                    if candidate_info:
+                        logger.info(f"Email routed to HR and acknowledgment sent to {from_email} (candidate ID: {candidate.id if candidate else 'N/A'})")
+                    else:
+                        logger.info(f"Email routed to HR and acknowledgment sent to {from_email}")
+                else:
+                    logger.warning(f"Email routed to HR, but failed to send acknowledgment to {from_email}")
+            else:
+                if ack_success:
+                    logger.warning(f"Failed to send email to HR for {from_email}, but acknowledgment sent to candidate")
+                else:
+                    logger.error(f"Failed to send email to HR and acknowledgment to {from_email}")
+            
+            # Return True if either forwarding or acknowledgment succeeded (ticket was created)
+            return success or ack_success
             
         except Exception as e:
             logger.error(f"Error routing email to HR: {str(e)}", exc_info=True)

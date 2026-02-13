@@ -582,6 +582,18 @@ def delete_ticket_route(ticket_id):
     return redirect(url_for('tickets_list'))
 
 
+@app.route('/candidate/<int:candidate_id>/delete', methods=['POST'])
+def delete_candidate_route(candidate_id):
+    """Delete a candidate."""
+    from database.models import delete_candidate
+    
+    if delete_candidate(candidate_id):
+        flash('Kandydat został usunięty', 'success')
+    else:
+        flash('Nie można usunąć kandydata', 'error')
+    return redirect(url_for('index'))
+
+
 @app.route('/process', methods=['POST'])
 def process_feedback():
     """Process CV and generate feedback."""
@@ -1083,6 +1095,20 @@ def db_export():
         logger.error(f"Error exporting database: {str(e)}", exc_info=True)
         flash(f'Błąd podczas eksportu bazy danych: {str(e)}', 'error')
         return redirect(url_for('index'))
+
+
+@app.route('/health')
+def health():
+    """Health check endpoint for Docker/Kubernetes."""
+    try:
+        # Sprawdź czy baza danych działa
+        from database.models import get_db
+        db = get_db()
+        db.execute('SELECT 1').fetchone()
+        return {'status': 'healthy', 'service': 'recruitment-ai'}, 200
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        return {'status': 'unhealthy', 'error': str(e)}, 503
 
 
 if __name__ == '__main__':

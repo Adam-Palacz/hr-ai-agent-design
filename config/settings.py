@@ -15,12 +15,12 @@ class Settings(BaseSettings):
         extra="ignore"
     )
     
-    # Azure OpenAI Configuration (jedyne źródło prawdy dla modeli)
-    # To jest *jedyne* aktywnie używane API – klasyczne OpenAI jest wyłączone.
+    # Azure OpenAI Configuration (single source of truth for models)
+    # This is the *only* actively used API – classic OpenAI is disabled.
     azure_openai_api_key: Optional[str] = None
     azure_openai_endpoint: str = "https://openai-agentai-pl.openai.azure.com/"
     azure_openai_api_version: str = "2024-12-01-preview"
-    # WAŻNE: te nazwy MUSZĄ odpowiadać nazwom deploymentów w Azure
+    # IMPORTANT: these names MUST match deployment names in Azure
     azure_openai_gpt_deployment: str = "gpt-4.1"
     azure_openai_vision_deployment: str = "gpt-5-nano"
 
@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-5-nano"
     openai_vision_model: str = "gpt-5-nano"
 
-    # Konfiguracja temperatury / timeoutów współdzielona przez wszystkie agenty
+    # Temperature / timeout configuration shared by all agents
     openai_temperature: float = 1.0
     openai_feedback_temperature: float = 0.7
     openai_timeout: int = 600
@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     email_check_interval: int = 60  # seconds
     email_monitor_enabled: bool = False
     
+    # Privacy policy and information clause
+    privacy_policy_url: Optional[str] = None  # URL to privacy policy / information clause
+    company_website: Optional[str] = None  # Company website URL (optional)
+    
     # Backward compatibility aliases (deprecated, use email_username/email_password)
     @property
     def gmail_username(self) -> Optional[str]:
@@ -78,14 +82,14 @@ class Settings(BaseSettings):
     @property
     def api_key(self) -> str:
         """
-        Zwraca klucz API dla Azure OpenAI.
+        Returns the API key for Azure OpenAI.
         
-        Klasyczne OPENAI_API_KEY nie jest już używane – całość idzie przez Azure.
+        Classic OPENAI_API_KEY is no longer used – everything goes through Azure.
         """
         if not self.azure_openai_api_key:
             raise ValueError(
                 "AZURE_OPENAI_API_KEY not found. "
-                "Dodaj go do pliku .env lub zmiennych środowiskowych."
+                "Add it to the .env file or environment variables."
             )
         return self.azure_openai_api_key
     
@@ -98,21 +102,21 @@ class Settings(BaseSettings):
         """
         Additional initialization after settings are loaded.
         
-        Jeśli skonfigurowano Azure OpenAI (endpoint + api_key), ustawiamy:
-        - zmienne środowiskowe oczekiwane przez klienta OpenAI (tryb Azure),
-        - openai_model na nazwę deploymentu Azure (azure_openai_gpt_deployment).
-        Dzięki temu agenci dalej używają jednego pola settings.openai_model,
-        ale faktycznie odwołują się do deploymentu w Azure.
+        If Azure OpenAI is configured (endpoint + api_key), we set:
+        - environment variables expected by the OpenAI client (Azure mode),
+        - openai_model to the Azure deployment name (azure_openai_gpt_deployment).
+        This way agents still use the single field settings.openai_model,
+        but actually refer to the Azure deployment.
         """
         if self.azure_openai_api_key and self.azure_openai_endpoint:
-            # Konfiguracja trybu Azure dla biblioteki OpenAI
+            # Configure Azure mode for the OpenAI library
             os.environ["OPENAI_API_KEY"] = self.azure_openai_api_key
-            # Używamy endpointu z portalu Azure (np. https://xxx.openai.azure.com)
+            # Use endpoint from Azure portal (e.g. https://xxx.openai.azure.com)
             os.environ["OPENAI_API_BASE"] = self.azure_openai_endpoint
             os.environ["OPENAI_API_TYPE"] = "azure"
             os.environ["OPENAI_API_VERSION"] = self.azure_openai_api_version
             
-            # Jeśli zdefiniowano nazwę deploymentu – użyj jej jako modelu
+            # If deployment name is defined – use it as the model
             if self.azure_openai_gpt_deployment:
                 self.openai_model = self.azure_openai_gpt_deployment
             if self.azure_openai_vision_deployment:

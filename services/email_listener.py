@@ -63,10 +63,28 @@ class EmailListener:
                 logger.error("Email credentials not provided to EmailListener")
                 return False
             
-            self.mail = imaplib.IMAP4_SSL(self.imap_server, self.imap_port)
+            # Utwórz połączenie IMAP z timeoutem
+            import socket
+            socket.setdefaulttimeout(30)  # 30 sekund timeout
+            
+            self.mail = imaplib.IMAP4_SSL(self.imap_server, self.imap_port, timeout=30)
             self.mail.login(self.email_username, self.email_password)
-            # logger.info(f"Connected to IMAP server {self.imap_server}: {self.email_username}")
+            logger.debug(f"Connected to IMAP server {self.imap_server}: {self.email_username}")
             return True
+        except socket.timeout:
+            logger.error(f"IMAP connection timeout to {self.imap_server}:{self.imap_port}. Check network/firewall.")
+            return False
+        except socket.error as e:
+            error_msg = str(e)
+            if "EOF" in error_msg or "Connection reset" in error_msg:
+                logger.warning(
+                    f"IMAP connection error (EOF/reset) to {self.imap_server}:{self.imap_port}. "
+                    "This may be temporary. Will retry in next cycle. "
+                    "Possible causes: server-side connection limit, firewall, or network issue."
+                )
+            else:
+                logger.error(f"IMAP socket error to {self.imap_server}:{self.imap_port}: {error_msg}")
+            return False
         except imaplib.IMAP4.error as e:
             error_msg = str(e)
             if "AUTHENTICATIONFAILED" in error_msg or "Invalid credentials" in error_msg:
@@ -79,10 +97,10 @@ class EmailListener:
                     "  4. IMAP might be disabled in your email account settings"
                 )
             else:
-                logger.error(f"Failed to connect to IMAP server {self.imap_server}: {error_msg}")
+                logger.error(f"IMAP protocol error to {self.imap_server}: {error_msg}")
             return False
         except Exception as e:
-            logger.error(f"Failed to connect to IMAP server {self.imap_server}: {str(e)}")
+            logger.error(f"Failed to connect to IMAP server {self.imap_server}:{self.imap_port}: {str(e)}")
             return False
     
     def disconnect(self):

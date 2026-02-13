@@ -1,16 +1,17 @@
 """
-Agent do generowania odpowiedzi na zapytania emailowe.
-Może używać podstawowej wiedzy lub RAG z bazy wektorowej.
+Agent for generating responses to email inquiries.
+Can use basic knowledge or RAG from the vector database.
 """
 import json
 from typing import Dict, List, Optional
 from agents.base_agent import BaseAgent
+from core.logger import logger
 
 
 class QueryResponderAgent(BaseAgent):
     """
-    Agent generujący odpowiedzi na zapytania emailowe.
-    Może używać podstawowej wiedzy lub RAG z bazy wektorowej.
+    Agent that generates responses to email inquiries.
+    Can use basic knowledge or RAG from the vector database.
     """
     
     def __init__(self, model_name: str = None, temperature: float = 0.7):
@@ -18,7 +19,7 @@ class QueryResponderAgent(BaseAgent):
         model_name = model_name or settings.openai_model
         super().__init__(model_name=model_name, temperature=temperature)
         
-        # Podstawowa wiedza
+        # Basic knowledge
         self.basic_knowledge = """
 PODSTAWOWA WIEDZA O REKRUTACJI:
 
@@ -58,16 +59,16 @@ PODSTAWOWA WIEDZA O REKRUTACJI:
         rag_context: Optional[List[Dict]] = None
     ) -> Optional[str]:
         """
-        Generuj odpowiedź na zapytanie emailowe.
+        Generate a response to an email inquiry.
         
         Args:
-            email_subject: Temat emaila
-            email_body: Treść emaila
-            sender_email: Email nadawcy
-            rag_context: Kontekst z RAG (lista dokumentów z bazy wektorowej)
+            email_subject: Email subject
+            email_body: Email body content
+            sender_email: Sender email address
+            rag_context: RAG context (list of documents from the vector database)
         
         Returns:
-            Wygenerowana odpowiedź lub None jeśli agent nie jest pewien (wtedy należy przekazać do HR)
+            Generated response or None if the agent is not confident (then forward to HR)
         """
         prompt = self._create_response_prompt(
             email_subject, email_body, sender_email, rag_context
@@ -88,7 +89,7 @@ PODSTAWOWA WIEDZA O REKRUTACJI:
             
             response_text = response.choices[0].message.content.strip()
             
-            # Sprawdź czy agent zwrócił sygnał przekazania do HR
+            # Check if agent returned the forward-to-HR signal
             if response_text.upper() == "FORWARD_TO_HR" or "FORWARD_TO_HR" in response_text.upper():
                 logger.info("Agent returned FORWARD_TO_HR signal - not confident enough to answer")
                 return None
@@ -106,7 +107,7 @@ PODSTAWOWA WIEDZA O REKRUTACJI:
                 "przekazaliśmy je do hr",
                 "dziękujemy za pańskie zapytanie. przekazaliśmy",
                 "przekazaliśmy je do działu",
-                "skontaktuje się z państwem w najkrótszym możliwym terminie"  # Typowa fraza gdy przekazujemy do HR
+                "skontaktuje się z państwem w najkrótszym możliwym terminie"  # Typical phrase when forwarding to HR
             ]
             
             response_lower = response_text.lower()
@@ -115,6 +116,9 @@ PODSTAWOWA WIEDZA O REKRUTACJI:
             if has_uncertainty:
                 logger.warning(f"Response contains uncertainty phrases - agent not confident enough. Phrases found: {[p for p in uncertainty_phrases if p in response_lower]}")
                 return None
+            
+            # Add privacy policy link to the end of response (after signature)
+            response_text = self._add_privacy_link(response_text)
             
             return response_text
             
@@ -153,28 +157,27 @@ Content: {email_body}
 TASK:
 Generate a professional, friendly, and helpful response to this inquiry.
 
-⚠️ CRITICAL RULE: Answer ONLY when you are 100% certain of the answer.
-If you have ANY doubts, DO NOT answer - forward to HR.
+DECISION RULES:
+1. If RAG context is provided and contains relevant information → Answer based on RAG context (you can be confident)
+2. If question can be answered from basic knowledge → Answer from basic knowledge
+3. If question requires specific candidate data or personal information → Return "FORWARD_TO_HR"
+4. If question requires interpretation or subjective assessment → Return "FORWARD_TO_HR"
+5. If RAG context is empty or irrelevant → Return "FORWARD_TO_HR"
 
 REQUIREMENTS:
-1. ⚠️ CRITICAL: Answer ONLY when you are 100% certain of the answer based on basic knowledge or RAG context
-2. ⚠️ CRITICAL: If RAG context does not contain the exact answer to the question, DO NOT answer - return special response forwarding to HR
-3. ⚠️ CRITICAL: If the answer requires interpretation, subjective assessment, or is not clearly specified in sources, DO NOT answer - return special response forwarding to HR
-4. ⚠️ CRITICAL: If the question concerns details that may vary or require current data, DO NOT answer - return special response forwarding to HR
-5. The answer must be factually accurate based on basic knowledge and RAG context (if available)
-6. Use professional but friendly tone
-7. Be empathetic and supportive
-8. ❌ NEVER answer in style: "Although we do not have detailed information..." - this means you should forward to HR
-9. ❌ NEVER answer in style: "we do not have detailed information" - this indicates lack of certainty
-10. ❌ NEVER answer if you do not have an exact, certain answer
-11. ❌ NEVER answer if RAG context does not contain a direct answer to the question
-12. ⚠️ CRITICAL: If you are not certain of the answer, ALWAYS return ONLY: "FORWARD_TO_HR" (without any other text, no Polish text, just these exact words)
-13. ⚠️ CRITICAL: DO NOT generate a response saying "we forwarded to HR" or "we will forward to HR" - if you are not certain, return ONLY "FORWARD_TO_HR"
-14. ⚠️ CRITICAL: DO NOT write "Dziękujemy za Pańskie zapytanie. Przekazaliśmy je do działu HR..." - if you are not certain, return ONLY "FORWARD_TO_HR"
-15. ⚠️ CRITICAL: If you cannot answer with 100% certainty, return ONLY "FORWARD_TO_HR" - do NOT write any Polish response
-16. Always end the response with: "Z wyrazami szacunku\n\nDział HR" (ONLY if you are answering, not if returning FORWARD_TO_HR)
-17. ⚠️ CRITICAL: The response MUST be written in POLISH (Polish language) - this is mandatory (ONLY if you are answering, not if returning FORWARD_TO_HR)
-18. If the question concerns a specific candidate application, suggest direct contact with HR
+1. If RAG context is provided, use it to answer the question - you can be confident if RAG found relevant documents
+2. The answer must be factually accurate based on basic knowledge and RAG context (if available)
+3. Use professional but friendly tone
+4. Be empathetic and supportive
+5. ❌ NEVER answer in style: "Although we do not have detailed information..." - this means you should forward to HR
+6. ❌ NEVER answer in style: "we do not have detailed information" - this indicates lack of certainty
+7. ❌ NEVER answer if question requires specific candidate data or personal information
+8. ⚠️ CRITICAL: If you cannot answer based on available context, return ONLY: "FORWARD_TO_HR" (without any other text, no Polish text, just these exact words)
+9. ⚠️ CRITICAL: DO NOT generate a response saying "we forwarded to HR" or "we will forward to HR" - if you cannot answer, return ONLY "FORWARD_TO_HR"
+10. ⚠️ CRITICAL: DO NOT write "Dziękujemy za Pańskie zapytanie. Przekazaliśmy je do działu HR..." - if you cannot answer, return ONLY "FORWARD_TO_HR"
+11. Always end the response with: "Z wyrazami szacunku\n\nDział HR" (ONLY if you are answering, not if returning FORWARD_TO_HR)
+12. ⚠️ CRITICAL: The response MUST be written in POLISH (Polish language) - this is mandatory (ONLY if you are answering, not if returning FORWARD_TO_HR)
+13. If the question concerns a specific candidate application, suggest direct contact with HR
 
 LANGUAGE REQUIREMENT (ONLY if answering, not if returning FORWARD_TO_HR):
 - You MUST write the ENTIRE response in POLISH (Polish language)
@@ -184,9 +187,33 @@ LANGUAGE REQUIREMENT (ONLY if answering, not if returning FORWARD_TO_HR):
 - The response should sound natural and human-like in Polish
 
 REMEMBER:
-- If you are 100% certain and can answer → Write response in Polish
-- If you are NOT 100% certain → Return ONLY "FORWARD_TO_HR" (no Polish text, no explanation)
+- If you have RAG context with relevant information → Answer in Polish (you can be confident)
+- If you can answer from basic knowledge → Answer in Polish
+- If you cannot answer based on available context → Return ONLY "FORWARD_TO_HR" (no Polish text, no explanation)
 
 ODPOWIEDŹ:
 """
+    
+    def _add_privacy_link(self, response_text: str) -> str:
+        """Add privacy policy link to the end of AI-generated response."""
+        from config import settings
+        
+        # Find where the signature ends
+        if "Z wyrazami szacunku" in response_text:
+            # Add privacy link after signature
+            privacy_text = ""
+            if settings.privacy_policy_url:
+                privacy_text = f"\n\nInformacje o przetwarzaniu danych osobowych, w tym wykorzystaniu narzędzi AI znajdziesz na naszej stronie internetowe: {settings.privacy_policy_url}"
+            elif settings.company_website:
+                privacy_text = f"\n\nInformacje o przetwarzaniu danych osobowych, w tym wykorzystaniu narzędzi AI znajdziesz na naszej stronie internetowe: {settings.company_website}"
+            else:
+                privacy_text = '\n\nInformacje o przetwarzaniu danych osobowych, w tym wykorzystaniu narzędzi AI znajdziesz na naszej stronie internetowe: "https://www.example.com/privacy".'
+            
+            # Insert privacy text after signature
+            response_text = response_text.replace(
+                "Z wyrazami szacunku\n\nDział HR",
+                f"Z wyrazami szacunku\n\nDział HR{privacy_text}"
+            )
+        
+        return response_text
 

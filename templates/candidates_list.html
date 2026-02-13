@@ -217,7 +217,14 @@
                             </span>
                         </td>
                         <td>
-                            <a href="{{ url_for('candidate_detail', candidate_id=candidate.id) }}" class="btn-view">Zobacz</a>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <a href="{{ url_for('candidate_detail', candidate_id=candidate.id) }}" class="btn-view">Zobacz</a>
+                                <form method="POST" action="{{ url_for('delete_candidate_route', candidate_id=candidate.id) }}" 
+                                      style="display: inline; margin: 0;" 
+                                      onsubmit="return confirm('Czy na pewno chcesz usunąć kandydata {{ candidate.full_name }}? Ta operacja jest nieodwracalna.');">
+                                    <button type="submit" class="btn-delete" style="background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 14px;">🗑️ Usuń</button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}

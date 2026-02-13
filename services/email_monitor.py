@@ -104,7 +104,7 @@ class EmailMonitor:
             try:
                 # Connect to email server
                 if not self.listener.connect():
-                    logger.warning("Failed to connect to email server. Retrying in next cycle.")
+                    logger.debug(f"Failed to connect to email server. Retrying in {self.check_interval}s.")
                     time.sleep(self.check_interval)
                     continue
                 

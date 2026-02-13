@@ -49,3 +49,5 @@ chroma_db/
 Thumbs.db
 
 _ksiazka
+*.db
+*.sqlite

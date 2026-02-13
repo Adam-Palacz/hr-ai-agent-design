@@ -1,5 +1,5 @@
 """
-Skrypt do załadowania dokumentów z knowledge_base do Qdrant.
+Script to load documents from knowledge_base into Qdrant.
 """
 import os
 import sys
@@ -15,22 +15,22 @@ load_dotenv()
 
 
 def load_documents_from_files(directory: str = "knowledge_base") -> list:
-    """Wczytaj wszystkie pliki .txt z katalogu i zwróć jako listę dokumentów."""
+    """Load all .txt files from the directory and return as a list of documents."""
     documents = []
     metadatas = []
     ids = []
     
     knowledge_path = Path(directory)
     if not knowledge_path.exists():
-        print(f"❌ Katalog {directory} nie istnieje!")
+        print(f"❌ Directory {directory} does not exist!")
         return documents, metadatas, ids
     
     txt_files = list(knowledge_path.glob("*.txt"))
     if not txt_files:
-        print(f"⚠️ Brak plików .txt w katalogu {directory}")
+        print(f"⚠️ No .txt files in directory {directory}")
         return documents, metadatas, ids
     
-    print(f"📚 Znaleziono {len(txt_files)} plików w {directory}:")
+    print(f"📚 Found {len(txt_files)} files in {directory}:")
     
     for file_path in txt_files:
         print(f"   - {file_path.name}")
@@ -39,7 +39,7 @@ def load_documents_from_files(directory: str = "knowledge_base") -> list:
                 content = f.read().strip()
                 if content:
                     documents.append(content)
-                    # Metadata zawiera nazwę pliku i typ dokumentu
+                    # Metadata contains file name and document type
                     filename = file_path.stem
                     metadata = {
                         "source": filename,
@@ -49,13 +49,13 @@ def load_documents_from_files(directory: str = "knowledge_base") -> list:
                     metadatas.append(metadata)
                     ids.append(f"kb_{filename}")
         except Exception as e:
-            print(f"   ⚠️ Błąd przy wczytywaniu {file_path.name}: {e}")
+            print(f"   ⚠️ Error loading {file_path.name}: {e}")
     
     return documents, metadatas, ids
 
 
 def _classify_document_type(filename: str) -> str:
-    """Klasyfikuj typ dokumentu na podstawie nazwy pliku."""
+    """Classify document type based on file name."""
     filename_lower = filename.lower()
     if "rodo" in filename_lower or "ai_act" in filename_lower or "ai act" in filename_lower:
         return "regulacje_prawne"
@@ -68,9 +68,9 @@ def _classify_document_type(filename: str) -> str:
 
 
 def main():
-    """Główna funkcja - ładuje dokumenty do Qdrant."""
+    """Main function – loads documents into Qdrant."""
     print("=" * 60)
-    print("ŁADOWANIE KNOWLEDGE BASE DO QDRANT")
+    print("LOADING KNOWLEDGE BASE TO QDRANT")
     print("=" * 60)
     
     azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
@@ -79,57 +79,77 @@ def main():
     azure_api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
     
     if not azure_api_key:
-        raise RuntimeError("AZURE_OPENAI_API_KEY nie jest ustawiony w .env")
+        raise RuntimeError("AZURE_OPENAI_API_KEY is not set in .env")
     
-    # Wczytaj dokumenty
+    # Load documents
     documents, metadatas, ids = load_documents_from_files("knowledge_base")
     
     if not documents:
-        print("❌ Brak dokumentów do załadowania!")
+        print("❌ No documents to load!")
         return
     
-    print(f"\n📝 Przygotowano {len(documents)} dokumentów do załadowania")
+    print(f"\n📝 Prepared {len(documents)} documents for loading")
     
-    # Inicjalizuj Qdrant
+    # Initialize Qdrant
+    # Check whether to use Qdrant server or local database
+    qdrant_host = os.getenv("QDRANT_HOST")
+    qdrant_port = int(os.getenv("QDRANT_PORT", "6333")) if os.getenv("QDRANT_PORT") else None
+    
     try:
-        db = QdrantRAG(
-            collection_name="recruitment_knowledge_base",
-            use_azure_openai=True,
-            azure_endpoint=azure_endpoint,
-            azure_api_key=azure_api_key,
-            azure_deployment=azure_deployment,
-            azure_api_version=azure_api_version,
-            qdrant_path="./qdrant_db"
-        )
+        if qdrant_host:
+            # Use Qdrant server
+            print(f"📤 Loading to Qdrant server ({qdrant_host}:{qdrant_port})...")
+            db = QdrantRAG(
+                collection_name="recruitment_knowledge_base",
+                use_azure_openai=True,
+                azure_endpoint=azure_endpoint,
+                azure_api_key=azure_api_key,
+                azure_deployment=azure_deployment,
+                azure_api_version=azure_api_version,
+                qdrant_host=qdrant_host,
+                qdrant_port=qdrant_port
+            )
+        else:
+            # Use local database (default)
+            print("📤 Loading to local Qdrant database...")
+            db = QdrantRAG(
+                collection_name="recruitment_knowledge_base",
+                use_azure_openai=True,
+                azure_endpoint=azure_endpoint,
+                azure_api_key=azure_api_key,
+                azure_deployment=azure_deployment,
+                azure_api_version=azure_api_version,
+                qdrant_path="./qdrant_db"
+            )
     except (RuntimeError, Exception) as e:
         error_str = str(e)
         if "already accessed" in error_str or "AlreadyLocked" in error_str or "already locked" in error_str.lower():
             print("\n" + "=" * 60)
-            print("❌ BŁĄD: Baza danych Qdrant jest już używana!")
+            print("❌ ERROR: Qdrant database is already in use!")
             print("=" * 60)
-            print("\n📌 Rozwiązanie:")
-            print("   1. Zamknij aplikację (app.py) jeśli jest uruchomiona")
-            print("   2. Sprawdź czy nie ma innych procesów używających Qdrant")
-            print("   3. Spróbuj ponownie za chwilę")
-            print("\n💡 Alternatywnie:")
-            print("   - Użyj Qdrant server dla współbieżnego dostępu")
-            print("   - Lub poczekaj aż aplikacja zwolni blokadę")
+            print("\n📌 Solution:")
+            print("   1. Close the application (app.py) if it is running")
+            print("   2. Check for other processes using Qdrant")
+            print("   3. Try again in a moment")
+            print("\n💡 Alternatively:")
+            print("   - Use Qdrant server for concurrent access")
+            print("   - Or wait until the application releases the lock")
             print("=" * 60)
             return
         else:
-            print(f"\n❌ Nieoczekiwany błąd podczas inicjalizacji Qdrant: {error_str}")
+            print(f"\n❌ Unexpected error during Qdrant initialization: {error_str}")
             raise
     
-    # Załaduj dokumenty
-    print(f"\n📤 Ładowanie dokumentów do Qdrant...")
+    # Load documents
+    print(f"\n📤 Loading documents into Qdrant...")
     db.add_documents(documents, ids=ids, metadatas=metadatas)
     
-    print(f"\n✅ Załadowano {len(documents)} dokumentów do kolekcji 'recruitment_knowledge_base'")
-    print(f"📊 Łączna liczba dokumentów w kolekcji: {db.count()}")
+    print(f"\n✅ Loaded {len(documents)} documents into collection 'recruitment_knowledge_base'")
+    print(f"📊 Total documents in collection: {db.count()}")
     
-    # Test wyszukiwania
+    # Search test
     print("\n" + "=" * 60)
-    print("TEST WYSZUKIWANIA")
+    print("SEARCH TEST")
     print("=" * 60)
     
     test_queries = [
@@ -142,15 +162,15 @@ def main():
         print(f"\n❓ Pytanie: {query}")
         results = db.search(query, n_results=2)
         if results:
-            print(f"   Znaleziono {len(results)} wyników:")
+            print(f"   Found {len(results)} results:")
             for i, r in enumerate(results, 1):
-                print(f"   {i}. Źródło: {r['metadata'].get('source', 'N/A')}")
-                print(f"      Fragment: {r['document'][:100]}...")
+                print(f"   {i}. Source: {r['metadata'].get('source', 'N/A')}")
+                print(f"      Excerpt: {r['document'][:100]}...")
         else:
-            print("   Brak wyników")
+            print("   No results")
     
     print("\n" + "=" * 60)
-    print("✅ Zakończono!")
+    print("✅ Done!")
     print("=" * 60)
 
 

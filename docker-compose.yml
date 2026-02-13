@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: recruitment-ai-app
+    ports:
+      - "5000:5000"
+    environment:
+      # Azure OpenAI
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-https://openai-agentai-pl.openai.azure.com/}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-12-01-preview}
+      - AZURE_OPENAI_GPT_DEPLOYMENT=${AZURE_OPENAI_GPT_DEPLOYMENT:-gpt-4.1}
+      - AZURE_OPENAI_VISION_DEPLOYMENT=${AZURE_OPENAI_VISION_DEPLOYMENT:-gpt-5-nano}
+      
+      # Email/SMTP
+      - EMAIL_USERNAME=${EMAIL_USERNAME}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      - SMTP_HOST=${SMTP_HOST:-smtp.zoho.eu}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
+      
+      # IMAP
+      - IMAP_HOST=${IMAP_HOST:-imap.zoho.eu}
+      - IMAP_PORT=${IMAP_PORT:-993}
+      - EMAIL_CHECK_INTERVAL=${EMAIL_CHECK_INTERVAL:-60}
+      - EMAIL_MONITOR_ENABLED=${EMAIL_MONITOR_ENABLED:-false}
+      
+      # Email routing
+      - IOD_EMAIL=${IOD_EMAIL}
+      - HR_EMAIL=${HR_EMAIL}
+      
+      # Qdrant
+      - QDRANT_HOST=${QDRANT_HOST:-qdrant}
+      - QDRANT_PORT=${QDRANT_PORT:-6333}
+      - QDRANT_COLLECTION_NAME=${QDRANT_COLLECTION_NAME:-recruitment_knowledge_base}
+      
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - VERBOSE=${VERBOSE:-false}
+    volumes:
+      # Persystencja danych
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+      - ./qdrant_db:/app/qdrant_db
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+    networks:
+      - recruitment-network
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: recruitment-ai-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - recruitment-network
+
+volumes:
+  qdrant_storage:
+    driver: local
+
+networks:
+  recruitment-network:
+    driver: bridge
+

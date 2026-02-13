@@ -287,7 +287,14 @@
                             </td>
                             <td>{{ candidate.created_at.strftime('%Y-%m-%d %H:%M') if candidate.created_at else 'N/A' }}</td>
                             <td>
-                                <a href="{{ url_for('candidate_detail', candidate_id=candidate.id) }}" class="link">Zobacz</a>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <a href="{{ url_for('candidate_detail', candidate_id=candidate.id) }}" class="link">Zobacz</a>
+                                    <form method="POST" action="{{ url_for('delete_candidate_route', candidate_id=candidate.id) }}" 
+                                          style="display: inline; margin: 0;" 
+                                          onsubmit="return confirm('Czy na pewno chcesz usunąć kandydata {{ candidate.full_name }}? Ta operacja jest nieodwracalna.');">
+                                        <button type="submit" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; text-decoration: none;">🗑️ Usuń</button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}

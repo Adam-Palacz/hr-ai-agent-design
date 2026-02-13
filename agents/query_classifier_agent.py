@@ -1,5 +1,5 @@
 """
-Agent do klasyfikacji zapytań emailowych i decyzji o sposobie odpowiedzi.
+Agent for classifying email inquiries and deciding how to respond.
 """
 import json
 from typing import Dict, Literal
@@ -8,12 +8,12 @@ from agents.base_agent import BaseAgent
 
 class QueryClassifierAgent(BaseAgent):
     """
-    Agent klasyfikujący zapytania emailowe i decydujący o sposobie odpowiedzi.
+    Agent that classifies email inquiries and decides how to respond.
     
-    Może zdecydować:
-    - "direct_answer" - może odpowiedzieć na podstawie podstawowej wiedzy
-    - "rag_answer" - musi użyć RAG z bazy wektorowej
-    - "forward_to_hr" - przekazać do HR (pytania specyficzne, wrażliwe, lub wymagające ludzkiej interwencji)
+    Can decide:
+    - "direct_answer" - can answer based on basic knowledge
+    - "rag_answer" - must use RAG from the vector database
+    - "forward_to_hr" - forward to HR (specific, sensitive, or human-intervention questions)
     """
     
     def __init__(self, model_name: str = None, temperature: float = 0.3):
@@ -21,7 +21,7 @@ class QueryClassifierAgent(BaseAgent):
         model_name = model_name or settings.openai_model
         super().__init__(model_name=model_name, temperature=temperature)
         
-        # Podstawowa wiedza dla agenta (może odpowiedzieć bez RAG)
+        # Basic knowledge for the agent (can answer without RAG)
         self.basic_knowledge = """
 PODSTAWOWA WIEDZA O REKRUTACJI:
 
@@ -51,7 +51,7 @@ PODSTAWOWA WIEDZA O REKRUTACJI:
 - Odrzucenie - generowanie feedbacku i wysłanie emaila
 """
 
-        # Opis bazy wiedzy RAG – aby agent wiedział, kiedy warto z niej skorzystać
+        # RAG knowledge base description – so the agent knows when to use it
         self.rag_knowledge_description = """
 DODATKOWA BAZA WIEDZY (RAG – vektorowa baza dokumentów):
 
@@ -73,14 +73,14 @@ Jeśli po użyciu RAG nadal nie ma wystarczających, jednoznacznych informacji �
     
     def classify_query(self, email_subject: str, email_body: str, sender_email: str) -> Dict:
         """
-        Klasyfikuj zapytanie i zdecyduj o sposobie odpowiedzi.
+        Classify the inquiry and decide how to respond.
         
         Returns:
-            Dict z kluczami:
+            Dict with keys:
             - action: "direct_answer" | "rag_answer" | "forward_to_hr"
-            - reasoning: uzasadnienie decyzji
-            - confidence: poziom pewności (0.0-1.0)
-            - suggested_response: sugestia odpowiedzi (jeśli action="direct_answer")
+            - reasoning: decision justification
+            - confidence: confidence level (0.0-1.0)
+            - suggested_response: response suggestion (if action="direct_answer")
         """
         prompt = self._create_classification_prompt(email_subject, email_body, sender_email)
         
@@ -98,32 +98,40 @@ Jeśli po użyciu RAG nadal nie ma wystarczających, jednoznacznych informacji �
             result_text = response.choices[0].message.content.strip()
             result = json.loads(result_text)
             
-            # Walidacja wyniku
+            # Validate result
             if result.get("action") not in ["direct_answer", "rag_answer", "forward_to_hr"]:
                 result["action"] = "forward_to_hr"
-                result["reasoning"] = "Nieprawidłowa klasyfikacja - przekazano do HR dla bezpieczeństwa"
+                result["reasoning"] = "Invalid classification - forwarded to HR for safety"
                 result["confidence"] = 0.0
             
-            # KRYTYCZNA WALIDACJA: Jeśli confidence jest zbyt niskie, przekaż do HR.
-            # Ustalamy pragmatyczny próg 0.7 – poniżej przekazujemy do HR.
+            # CRITICAL VALIDATION: Different thresholds for different actions
+            # For rag_answer: allow trying even with lower confidence (0.5+), as RAG may find the answer
+            # For direct_answer and forward_to_hr: require higher confidence (0.7+)
             confidence = result.get("confidence", 0.0)
             try:
                 confidence = float(confidence)
             except (ValueError, TypeError):
                 confidence = 0.0
             
-            if confidence < 0.7:
+            action = result.get("action", "forward_to_hr")
+            if action == "rag_answer" and confidence < 0.5:
+                # For rag_answer: threshold 0.5 (lower, as RAG may find the answer)
                 result["action"] = "forward_to_hr"
-                result["reasoning"] = f"Poziom pewności ({confidence}) jest mniejszy niż wymagany (0.7). Przekazano do HR dla bezpieczeństwa."
+                result["reasoning"] = f"Confidence level ({confidence}) is too low for rag_answer (< 0.5). Forwarded to HR for safety."
+                result["confidence"] = confidence
+            elif action != "rag_answer" and confidence < 0.7:
+                # For direct_answer and forward_to_hr: threshold 0.7
+                result["action"] = "forward_to_hr"
+                result["reasoning"] = f"Confidence level ({confidence}) is below required (0.7). Forwarded to HR for safety."
                 result["confidence"] = confidence
             
             return result
             
         except Exception as e:
-            # W przypadku błędu, bezpieczniej przekazać do HR
+            # On error, safer to forward to HR
             return {
                 "action": "forward_to_hr",
-                "reasoning": f"Błąd podczas klasyfikacji: {str(e)}",
+                "reasoning": f"Error during classification: {str(e)}",
                 "confidence": 0.0
             }
     

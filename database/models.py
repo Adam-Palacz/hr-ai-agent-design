@@ -786,6 +786,48 @@ def delete_position(position_id: int) -> bool:
     return deleted
 
 
+def delete_candidate(candidate_id: int) -> bool:
+    """Delete a candidate and all related records."""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Delete related records first (to avoid foreign key constraints)
+        # Note: SQLite doesn't enforce foreign keys by default, but it's good practice
+        
+        # Delete feedback emails
+        cursor.execute('DELETE FROM feedback_emails WHERE candidate_id = ?', (candidate_id,))
+        
+        # Delete HR notes
+        cursor.execute('DELETE FROM hr_notes WHERE candidate_id = ?', (candidate_id,))
+        
+        # Delete model responses
+        cursor.execute('DELETE FROM model_responses WHERE candidate_id = ?', (candidate_id,))
+        
+        # Delete validation errors
+        cursor.execute('DELETE FROM validation_errors WHERE candidate_id = ?', (candidate_id,))
+        
+        # Update tickets to remove candidate reference (set to NULL)
+        cursor.execute('UPDATE tickets SET related_candidate_id = NULL WHERE related_candidate_id = ?', (candidate_id,))
+        
+        # Delete the candidate
+        cursor.execute('DELETE FROM candidates WHERE id = ?', (candidate_id,))
+        deleted = cursor.rowcount > 0
+        
+        conn.commit()
+        conn.close()
+        
+        if deleted:
+            logger.info(f"Deleted candidate {candidate_id} and all related records")
+        
+        return deleted
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        logger.error(f"Error deleting candidate {candidate_id}: {str(e)}")
+        return False
+
+
 def save_feedback_email(candidate_id: int, email_content: str, message_id: Optional[str] = None) -> FeedbackEmail:
     """Save feedback email to database."""
     conn = get_db()

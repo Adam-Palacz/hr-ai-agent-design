@@ -28,7 +28,9 @@ class QdrantRAG:
         azure_api_key: Optional[str] = None,
         azure_deployment: Optional[str] = None,
         azure_api_version: Optional[str] = None,
-        qdrant_path: Optional[str] = None
+        qdrant_path: Optional[str] = None,
+        qdrant_host: Optional[str] = None,
+        qdrant_port: Optional[int] = None
     ):
         """
         Initialize Qdrant RAG service.
@@ -40,10 +42,18 @@ class QdrantRAG:
             azure_api_key: Azure OpenAI API key
             azure_deployment: Deployment name (e.g., "text-embedding-3-small")
             azure_api_version: Azure OpenAI API version
-            qdrant_path: Path to local Qdrant database (None = in-memory)
+            qdrant_path: Path to local Qdrant database (None = in-memory or server)
+            qdrant_host: Qdrant server hostname (e.g., "qdrant" or "localhost")
+            qdrant_port: Qdrant server port (default: 6333)
         """
         # Initialize Qdrant client
-        if qdrant_path:
+        # Priority: server (host+port) > local path > in-memory
+        if qdrant_host:
+            # Connect to Qdrant server
+            qdrant_port = qdrant_port or 6333
+            self.client = QdrantClient(host=qdrant_host, port=qdrant_port)
+            logger.info(f"Qdrant server connection: {qdrant_host}:{qdrant_port}")
+        elif qdrant_path:
             try:
                 self.client = QdrantClient(path=qdrant_path)
                 logger.info(f"Qdrant local database: {qdrant_path}")
@@ -51,7 +61,8 @@ class QdrantRAG:
                 if "already accessed by another instance" in str(e) or "AlreadyLocked" in str(e):
                     error_msg = (
                         f"Qdrant database at {qdrant_path} is already locked by another instance. "
-                        "Close other Qdrant clients (e.g., app.py) before accessing."
+                        "Close other Qdrant clients (e.g., app.py) before accessing. "
+                        "Consider using Qdrant server (qdrant_host/qdrant_port) instead."
                     )
                     logger.error(error_msg)
                     raise RuntimeError(error_msg) from e
@@ -173,20 +184,55 @@ class QdrantRAG:
         query_embedding = self._generate_embeddings([query])[0]
         
         logger.debug(f"Searching in Qdrant...")
-        # Use query_points - simpler API
-        results = self.client.query_points(
-            collection_name=self.collection_name,
-            query=query_embedding,  # Direct vector
-            limit=n_results
-        )
+        # Use search API (works with Qdrant 1.8.4+)
+        try:
+            # Try search method first (standard API)
+            results = self.client.search(
+                collection_name=self.collection_name,
+                query_vector=query_embedding,
+                limit=n_results
+            )
+        except (AttributeError, Exception) as e:
+            # Fallback for older Qdrant versions or different API
+            logger.warning(f"Search method failed ({e}), trying alternative API...")
+            try:
+                # Try scroll with vectors (for manual similarity calculation)
+                scroll_results = self.client.scroll(
+                    collection_name=self.collection_name,
+                    limit=100,  # Get more points to calculate similarity
+                    with_payload=True,
+                    with_vectors=True  # Need vectors for similarity calculation
+                )
+                # Calculate distances manually (simple cosine similarity)
+                import numpy as np
+                query_vec = np.array(query_embedding)
+                scored_results = []
+                for point in scroll_results[0]:
+                    if point.vector:
+                        point_vec = np.array(point.vector)
+                        # Cosine similarity
+                        similarity = np.dot(query_vec, point_vec) / (np.linalg.norm(query_vec) * np.linalg.norm(point_vec))
+                        scored_results.append((point, similarity))
+                
+                # Sort by similarity and take top n
+                scored_results.sort(key=lambda x: x[1], reverse=True)
+                results = [point for point, score in scored_results[:n_results]]
+            except Exception as e2:
+                logger.error(f"All search methods failed: {e2}")
+                return []
         
         formatted_results = []
-        for point in results.points:
+        for point in results:
+            # Handle both search result format and scroll format
+            point_id = point.id if hasattr(point, 'id') else getattr(point, 'id', None)
+            point_payload = point.payload if hasattr(point, 'payload') else getattr(point, 'payload', {})
+            point_score = point.score if hasattr(point, 'score') else getattr(point, 'score', None)
+            
             formatted_results.append({
-                'id': str(point.id),  # Convert UUID to string
-                'document': point.payload.get('document', ''),
-                'metadata': {k: v for k, v in point.payload.items() if k not in ['document', 'original_id']},
-                'distance': point.score if hasattr(point, 'score') else None
+                'id': str(point_id),  # Convert UUID to string
+                'document': point_payload.get('document', ''),
+                'metadata': {k: v for k, v in point_payload.items() if k not in ['document', 'original_id']},
+                'distance': point_score
             })
         
         logger.debug(f"Found {len(formatted_results)} results")

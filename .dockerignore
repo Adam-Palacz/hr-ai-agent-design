@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Environment
+.env
+.env.local
+
+# Output files
+*.pdf
+feedback_*.html
+feedback_*.txt
+example_cv.pdf
+
+# Database (będzie w volume)
+*.db
+data/*.db
+
+# Qdrant (będzie w volume)
+qdrant_db/
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+_ksiazka/
+*.md
+!README.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Uploads (będzie w volume, ale kopiujemy strukturę)
+uploads/*.pdf
+uploads/*.html
+
