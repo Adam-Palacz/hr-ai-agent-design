@@ -17,11 +17,11 @@ def get_ai_footer() -> str:
 
     privacy_link = ""
     if settings.privacy_policy_url:
-        privacy_link = f' Informacje o przetwarzaniu danych osobowych, w tym wykorzystaniu narzędzi AI znajdziesz na naszej stronie internetowe: <a href="{settings.privacy_policy_url}" style="color: #666; text-decoration: underline;">{settings.privacy_policy_url}</a>'
+        privacy_link = f' Informacje o przetwarzaniu danych osobowych, w tym wykorzystaniu narzędzi AI znajdziesz na naszej stronie internetowej: <a href="{settings.privacy_policy_url}" style="color: #666; text-decoration: underline;">{settings.privacy_policy_url}</a>'
     elif settings.company_website:
-        privacy_link = f' Informacje o przetwarzaniu danych osobowych, w tym wykorzystaniu narzędzi AI znajdziesz na naszej stronie internetowe: <a href="{settings.company_website}" style="color: #666; text-decoration: underline;">stronie firmy</a>.'
+        privacy_link = f' Informacje o przetwarzaniu danych osobowych, w tym wykorzystaniu narzędzi AI znajdziesz na naszej stronie internetowej: <a href="{settings.company_website}" style="color: #666; text-decoration: underline;">stronie firmy</a>.'
     else:
-        privacy_link = ' Informacje o przetwarzaniu danych osobowych, w tym wykorzystaniu narzędzi AI znajdziesz na naszej stronie internetowe: "https://www.example.com/privacy".'
+        privacy_link = ' Informacje o przetwarzaniu danych osobowych, w tym wykorzystaniu narzędzi AI znajdziesz na naszej stronie internetowej: "https://www.example.com/privacy".'
 
     return f"""<p style="font-size: 10px; color: #666; margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd; text-align: center;">
     Informacja ta została wygenerowana automatycznie przez Asystenta AI działu rekrutacji, jednakże decyzje dotyczące zatrudnienia zostały podjęte przez pracownika działu HR.{privacy_link}
@@ -72,14 +72,19 @@ def format_feedback_as_html(
         # Check if footer already exists (to avoid duplicates)
         if "Informacja ta została wygenerowana automatycznie" not in html_content:
             # Insert hardcoded signature, consent message (if any), and hardcoded footer before </body> tag
-            # Get fresh footer with current privacy policy URL
             ai_footer = get_ai_footer()
-            html_content = re.sub(
+            new_html, count = re.subn(
                 r"(</body>)",
                 EMAIL_SIGNATURE + consent_message + ai_footer + r"\1",
                 html_content,
                 flags=re.IGNORECASE,
             )
+            if count == 0:
+                html_content = (
+                    html_content.rstrip() + "\n" + EMAIL_SIGNATURE + consent_message + ai_footer
+                )
+            else:
+                html_content = new_html
 
         return html_content
 

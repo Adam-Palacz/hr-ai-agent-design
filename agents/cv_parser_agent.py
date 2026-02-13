@@ -396,6 +396,16 @@ class CVParserAgent(BaseAgent):
                 temperature=self.temperature,
             )
             raw_text = response.choices[0].message.content
+
+            self._save_model_response(
+                agent_type="cv_parser",
+                input_data={"cv_text": cv_text[:1000] + "..." if len(cv_text) > 1000 else cv_text},
+                output_data=raw_text,
+                candidate_id=candidate_id,
+                metadata={"temperature": self.temperature},
+                response=response,
+            )
+
             return self._parse_cv_from_text_raw(raw_text)
         except Exception as e:
             raise Exception(f"Failed to parse CV text: {str(e)}") from e

@@ -41,6 +41,10 @@ services:
       # Logging
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - VERBOSE=${VERBOSE:-false}
+
+      # Flask (in Docker must listen on 0.0.0.0 to accept external connections)
+      - FLASK_HOST=0.0.0.0
+      - FLASK_DEBUG=false
     volumes:
       # Persystencja danych
       - ./data:/app/data

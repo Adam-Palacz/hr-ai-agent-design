@@ -222,7 +222,7 @@
                 {% endif %}
             {% endwith %}
 
-            <form action="/process" method="post" id="reviewForm">
+            <form action="{{ url_for('process_feedback') }}" method="post" id="reviewForm">
                 {% if candidate %}<input type="hidden" name="candidate_id" value="{{ candidate.id }}">{% endif %}
                 <input type="hidden" name="filename" value="{{ filename }}">
 

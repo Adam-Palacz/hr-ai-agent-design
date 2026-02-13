@@ -1,6 +1,7 @@
 """Simple web application for HR to review CVs and send feedback emails."""
 
 import os
+import re
 import smtplib
 import threading
 import json
@@ -1147,11 +1148,14 @@ def db_view():
         # Get all table names
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         tables = [row[0] for row in cursor.fetchall()]
+        # Allowlist: only use table names from schema (safe identifier)
+        safe_table = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+        tables = [t for t in tables if safe_table.match(t)]
 
         # Get data from each table
         table_data = {}
         for table in tables:
-            cursor.execute(f"SELECT * FROM {table}")
+            cursor.execute(f"SELECT * FROM [{table}]")
             rows = cursor.fetchall()
             columns = [description[0] for description in cursor.description]
             table_data[table] = {
@@ -1181,12 +1185,14 @@ def db_export():
         # Get all table names
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         tables = [row[0] for row in cursor.fetchall()]
+        safe_table = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+        tables = [t for t in tables if safe_table.match(t)]
 
         # Get data from each table
         export_data = {"export_date": datetime.now().isoformat(), "tables": {}}
 
         for table in tables:
-            cursor.execute(f"SELECT * FROM {table}")
+            cursor.execute(f"SELECT * FROM [{table}]")
             rows = cursor.fetchall()
             columns = [description[0] for description in cursor.description]
             export_data["tables"][table] = {"columns": columns, "rows": []}
@@ -1234,5 +1240,8 @@ def health():
 
 
 if __name__ == "__main__":
-    logger.info("Starting Flask application")
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    _debug = os.getenv("FLASK_DEBUG", "false").lower() in ("1", "true", "yes")
+    _host = os.getenv("FLASK_HOST", "127.0.0.1")
+    _port = int(os.getenv("FLASK_PORT", "5000"))
+    logger.info("Starting Flask application (debug=%s, host=%s, port=%s)", _debug, _host, _port)
+    app.run(debug=_debug, host=_host, port=_port)

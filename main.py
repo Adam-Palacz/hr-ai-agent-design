@@ -137,7 +137,7 @@ def main():
             print(f"✅ Decision: {hr_feedback.decision.value.upper()}")
             print()
 
-            candidate_feedback = feedback_service.generate_feedback(
+            candidate_feedback, is_validated, _ = feedback_service.generate_feedback(
                 cv_data,
                 hr_feedback,
                 job_offer=job_offer,
@@ -145,7 +145,7 @@ def main():
                 save_to_file=True,
             )
 
-            # Display HTML feedback info
+            # Display HTML feedback info (save happens in generate_feedback when save_to_file=True)
             _ = feedback_service.get_feedback_html(candidate_feedback)
             html_filename = f"feedback_{cv_data.full_name.replace(' ', '_')}.html"
 

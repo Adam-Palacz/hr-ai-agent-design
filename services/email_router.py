@@ -53,8 +53,8 @@ class EmailRouter:
         self.iod_email = iod_email
         self.hr_email = hr_email
         # Track processed emails to prevent duplicates (using Message-ID or UID)
-        # Use set with max size limit to prevent memory issues
-        self.processed_emails = set()
+        # Use insertion-ordered dict to preserve recency when trimming
+        self.processed_emails: dict[str, None] = {}
         self.max_processed_emails = 1000  # Maximum number of processed emails to track
 
         # Initialize AI client for ticket priority/deadline determination
@@ -125,22 +125,18 @@ class EmailRouter:
                         f"from: {email_data.get('from_email', 'unknown')}), skipping duplicate"
                     )
                     return True  # Return True to avoid reprocessing
-                self.processed_emails.add(email_id)
+                self.processed_emails[email_id] = None
                 logger.debug(
                     f"Marking email {email_id} as processed (classification: {classification})"
                 )
-                # Keep only last N processed emails to prevent memory issues
-                # Since set doesn't preserve order, we clear and rebuild when limit is reached
+                # Keep only last N processed emails (oldest evicted first)
                 if len(self.processed_emails) > self.max_processed_emails:
-                    # Clear half of the set (simple approach - set doesn't have order)
-                    # In practice, this will keep roughly the most recent entries
-                    # Better approach would be to use collections.deque, but set is simpler for lookup
-                    emails_list = list(self.processed_emails)
-                    # Keep last half
                     keep_count = self.max_processed_emails // 2
-                    self.processed_emails = set(emails_list[-keep_count:])
+                    keys = list(self.processed_emails)
+                    for k in keys[:-keep_count]:
+                        del self.processed_emails[k]
                     logger.debug(
-                        f"Trimmed processed_emails set to {len(self.processed_emails)} entries"
+                        f"Trimmed processed_emails to {len(self.processed_emails)} entries"
                     )
 
             if classification == "iod":
@@ -531,12 +527,11 @@ Temat: {email_data.get('subject', 'Brak tematu')}
                 )
                 action = "forward_to_hr"
                 reasoning = f"Poziom pewności ({confidence:.2f}) jest zbyt niski dla rag_answer. {reasoning}"
-            elif action != "rag_answer" and confidence < 0.7:
-                # For direct_answer and forward_to_hr: threshold 0.7
-                if action == "direct_answer":
-                    logger.warning(
-                        f"Confidence ({confidence:.2f}) < 0.70 for direct_answer, forwarding to HR instead"
-                    )
+            elif action == "direct_answer" and confidence < 0.7:
+                # Only downgrade direct_answer to forward_to_hr on low confidence; leave forward_to_hr unchanged
+                logger.warning(
+                    f"Confidence ({confidence:.2f}) < 0.70 for direct_answer, forwarding to HR instead"
+                )
                 action = "forward_to_hr"
                 reasoning = f"Poziom pewności ({confidence:.2f}) jest mniejszy niż wymagany (0.70). {reasoning}"
 
@@ -723,6 +718,8 @@ WYGENEROWANA ODPOWIEDŹ:
             from database.models import TicketPriority
             import json
 
+            # Note: email_subject, from_email, email_body are user-controlled; consider sanitizing
+            # or passing as a separate user message to reduce prompt injection risk in production.
             prompt = f"""
 Analyze the following email inquiry and determine the appropriate ticket priority and deadline.
 
