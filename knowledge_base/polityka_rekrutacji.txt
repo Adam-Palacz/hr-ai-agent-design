@@ -113,4 +113,3 @@ POLITYKA REKRUTACJI FIRMY
 - Jeśli kandydat nie wyraził zgody, informujemy go o możliwości zmiany decyzji
 - Jeśli kandydat wyraził zgodę, informujemy go, że będziemy go rozważać w przyszłych rekrutacjach
 - Kandydat może w każdej chwili zmienić swoją decyzję, odpowiadając na email
-

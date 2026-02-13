@@ -14,14 +14,14 @@ from utils.json_parser import parse_json_safe
 
 class FeedbackCorrectionAgent(BaseAgent):
     """Agent for correcting candidate feedback emails based on validation feedback."""
-    
+
     def __init__(
         self,
         model_name: str = "gpt-4o",
         temperature: float = 0.3,
         api_key: Optional[str] = None,
         timeout: int = 120,
-        max_retries: int = 2
+        max_retries: int = 2,
     ):
         """
         Initialize Feedback Correction Agent using Azure OpenAI SDK (no LangChain).
@@ -43,7 +43,7 @@ class FeedbackCorrectionAgent(BaseAgent):
 
         # Store prompt template
         self.prompt_template = CORRECTION_PROMPT
-    
+
     def correct_feedback(
         self,
         original_html: str,
@@ -52,27 +52,39 @@ class FeedbackCorrectionAgent(BaseAgent):
         hr_feedback: HRFeedback,
         job_offer: Optional[JobOffer] = None,
         candidate_id: Optional[int] = None,
-        correction_number: Optional[int] = None
+        correction_number: Optional[int] = None,
     ) -> CorrectedFeedback:
         """
         Correct feedback email based on validation feedback using Azure OpenAI.
         """
         logger.info(f"Correcting feedback email for: {cv_data.full_name}")
-        
+
         # Format data for prompt
         cv_data_str = self._format_cv_data(cv_data)
         hr_feedback_str = self._format_hr_feedback(hr_feedback)
-        
+
         if job_offer:
             job_offer_str = self._format_job_offer(job_offer)
         else:
             job_offer_str = "No job offer information provided"
-        
+
         # Format validation feedback
-        issues_str = "\n".join([f"- {issue}" for issue in validation_result.issues_found]) if validation_result.issues_found else "None"
-        ethical_str = "\n".join([f"- {concern}" for concern in validation_result.ethical_concerns]) if validation_result.ethical_concerns else "None"
-        factual_str = "\n".join([f"- {error}" for error in validation_result.factual_errors]) if validation_result.factual_errors else "None"
-        
+        issues_str = (
+            "\n".join([f"- {issue}" for issue in validation_result.issues_found])
+            if validation_result.issues_found
+            else "None"
+        )
+        ethical_str = (
+            "\n".join([f"- {concern}" for concern in validation_result.ethical_concerns])
+            if validation_result.ethical_concerns
+            else "None"
+        )
+        factual_str = (
+            "\n".join([f"- {error}" for error in validation_result.factual_errors])
+            if validation_result.factual_errors
+            else "None"
+        )
+
         # Build prompt with format instructions
         prompt_text = self.prompt_template.format(
             original_html=original_html,
@@ -203,5 +215,3 @@ class FeedbackCorrectionAgent(BaseAgent):
             "</body>\n"
             "</html>"
         )
-    
-

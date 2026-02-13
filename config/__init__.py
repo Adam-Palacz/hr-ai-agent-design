@@ -1,4 +1,5 @@
 """Configuration package."""
+
 try:
     from config.settings import Settings, settings
 except Exception:  # pragma: no cover
@@ -7,4 +8,3 @@ except Exception:  # pragma: no cover
     settings = None  # type: ignore
 
 __all__ = ["Settings", "settings"]
-

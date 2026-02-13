@@ -1,26 +1,28 @@
 """
 Agent for classifying email inquiries and deciding how to respond.
 """
+
 import json
-from typing import Dict, Literal
+from typing import Dict
 from agents.base_agent import BaseAgent
 
 
 class QueryClassifierAgent(BaseAgent):
     """
     Agent that classifies email inquiries and decides how to respond.
-    
+
     Can decide:
     - "direct_answer" - can answer based on basic knowledge
     - "rag_answer" - must use RAG from the vector database
     - "forward_to_hr" - forward to HR (specific, sensitive, or human-intervention questions)
     """
-    
+
     def __init__(self, model_name: str = None, temperature: float = 0.3):
         from config import settings
+
         model_name = model_name or settings.openai_model
         super().__init__(model_name=model_name, temperature=temperature)
-        
+
         # Basic knowledge for the agent (can answer without RAG)
         self.basic_knowledge = """
 PODSTAWOWA WIEDZA O REKRUTACJI:
@@ -70,11 +72,11 @@ RAG jest szczególnie przydatny gdy:
 Jeśli pytanie DOTYCZY powyższych obszarów, preferuj użycie \"rag_answer\".
 Jeśli po użyciu RAG nadal nie ma wystarczających, jednoznacznych informacji – wtedy przekaż sprawę do HR (forward_to_hr).
 """
-    
+
     def classify_query(self, email_subject: str, email_body: str, sender_email: str) -> Dict:
         """
         Classify the inquiry and decide how to respond.
-        
+
         Returns:
             Dict with keys:
             - action: "direct_answer" | "rag_answer" | "forward_to_hr"
@@ -83,27 +85,30 @@ Jeśli po użyciu RAG nadal nie ma wystarczających, jednoznacznych informacji �
             - suggested_response: response suggestion (if action="direct_answer")
         """
         prompt = self._create_classification_prompt(email_subject, email_body, sender_email)
-        
+
         try:
             response = self.client.chat.completions.create(
                 model=self.model_name,
                 messages=[
-                    {"role": "system", "content": "You are an expert in classifying email inquiries in the recruitment process. You analyze inquiries and decide on the best way to respond."},
-                    {"role": "user", "content": prompt}
+                    {
+                        "role": "system",
+                        "content": "You are an expert in classifying email inquiries in the recruitment process. You analyze inquiries and decide on the best way to respond.",
+                    },
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=self.temperature,
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"},
             )
-            
+
             result_text = response.choices[0].message.content.strip()
             result = json.loads(result_text)
-            
+
             # Validate result
             if result.get("action") not in ["direct_answer", "rag_answer", "forward_to_hr"]:
                 result["action"] = "forward_to_hr"
                 result["reasoning"] = "Invalid classification - forwarded to HR for safety"
                 result["confidence"] = 0.0
-            
+
             # CRITICAL VALIDATION: Different thresholds for different actions
             # For rag_answer: allow trying even with lower confidence (0.5+), as RAG may find the answer
             # For direct_answer and forward_to_hr: require higher confidence (0.7+)
@@ -112,30 +117,36 @@ Jeśli po użyciu RAG nadal nie ma wystarczających, jednoznacznych informacji �
                 confidence = float(confidence)
             except (ValueError, TypeError):
                 confidence = 0.0
-            
+
             action = result.get("action", "forward_to_hr")
             if action == "rag_answer" and confidence < 0.5:
                 # For rag_answer: threshold 0.5 (lower, as RAG may find the answer)
                 result["action"] = "forward_to_hr"
-                result["reasoning"] = f"Confidence level ({confidence}) is too low for rag_answer (< 0.5). Forwarded to HR for safety."
+                result["reasoning"] = (
+                    f"Confidence level ({confidence}) is too low for rag_answer (< 0.5). Forwarded to HR for safety."
+                )
                 result["confidence"] = confidence
             elif action != "rag_answer" and confidence < 0.7:
                 # For direct_answer and forward_to_hr: threshold 0.7
                 result["action"] = "forward_to_hr"
-                result["reasoning"] = f"Confidence level ({confidence}) is below required (0.7). Forwarded to HR for safety."
+                result["reasoning"] = (
+                    f"Confidence level ({confidence}) is below required (0.7). Forwarded to HR for safety."
+                )
                 result["confidence"] = confidence
-            
+
             return result
-            
+
         except Exception as e:
             # On error, safer to forward to HR
             return {
                 "action": "forward_to_hr",
                 "reasoning": f"Error during classification: {str(e)}",
-                "confidence": 0.0
+                "confidence": 0.0,
             }
-    
-    def _create_classification_prompt(self, email_subject: str, email_body: str, sender_email: str) -> str:
+
+    def _create_classification_prompt(
+        self, email_subject: str, email_body: str, sender_email: str
+    ) -> str:
         """Create prompt for query classification."""
         return f"""
 You are analyzing an email inquiry from a candidate in the recruitment process.
@@ -195,4 +206,3 @@ RETURN JSON in format:
     "suggested_response": "Response suggestion (only if action='direct_answer', otherwise null)"
 }}
 """
-

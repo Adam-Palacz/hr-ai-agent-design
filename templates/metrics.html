@@ -437,7 +437,7 @@
                         <div class="metric-value">{{ metrics.costs.avg_tokens_per_response|int }}<span class="metric-unit"> tokens</span></div>
                     </div>
                 </div>
-                
+
                 {% if metrics.costs.cost_by_agent %}
                 <h3 style="margin-top: 30px; margin-bottom: 15px;">Koszty według Typu Agenta</h3>
                 <table class="table">
@@ -465,9 +465,9 @@
                     </tbody>
                 </table>
                 {% endif %}
-                
+
                 <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; font-size: 14px; color: #6c757d;">
-                    <strong>Uwaga:</strong> Koszty są obliczane na podstawie przybliżonych cen Azure OpenAI (stan na grudzień 2025). 
+                    <strong>Uwaga:</strong> Koszty są obliczane na podstawie przybliżonych cen Azure OpenAI (stan na grudzień 2025).
                     Rzeczywiste koszty mogą się różnić w zależności od deploymentu i aktualnych cen dostawcy.
                     Dane kosztowe dostępne dla {{ metrics.costs.responses_with_cost_data }} z {{ metrics.costs.total_responses }} odpowiedzi.
                 </div>
@@ -518,4 +518,3 @@
     </div>
 </body>
 </html>
-

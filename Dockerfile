@@ -65,4 +65,3 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Dla MVP: wszystko w jednym kontenerze (web + email monitor w threads)
 # Dla produkcji: użyj Dockerfile.web + Dockerfile.worker z docker-compose.prod.yml
 CMD ["python", "app.py"]
-

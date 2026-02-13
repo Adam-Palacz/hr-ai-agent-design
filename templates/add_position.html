@@ -95,10 +95,10 @@
 <body>
     <div class="container">
         <a href="{{ url_for('positions_list') }}" class="btn-back">← Powrót do listy pozycji</a>
-        
+
         <h1>➕ Dodaj Nową Pozycję</h1>
         <p class="subtitle">Wypełnij formularz, aby dodać nową pozycję rekrutacyjną</p>
-        
+
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -106,27 +106,25 @@
                 {% endfor %}
             {% endif %}
         {% endwith %}
-        
+
         <form action="{{ url_for('add_position') }}" method="post">
             <div class="form-group">
                 <label for="title">Tytuł stanowiska <span class="required">*</span></label>
                 <input type="text" name="title" id="title" required placeholder="np. Senior DevOps Engineer">
             </div>
-            
+
             <div class="form-group">
                 <label for="company">Firma <span class="required">*</span></label>
                 <input type="text" name="company" id="company" required placeholder="np. TechCorp Inc.">
             </div>
-            
+
             <div class="form-group">
                 <label for="description">Opis stanowiska</label>
                 <textarea name="description" id="description" placeholder="Wymagania, obowiązki, korzyści, etc."></textarea>
             </div>
-            
+
             <button type="submit" class="btn-submit">Dodaj Pozycję</button>
         </form>
     </div>
 </body>
 </html>
-
-

@@ -120,7 +120,7 @@
     <div class="container">
         <h1>📄 Przesyłanie CV</h1>
         <p class="subtitle">Prześlij plik PDF z CV kandydata do przeglądu</p>
-        
+
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -128,7 +128,7 @@
                 {% endfor %}
             {% endif %}
         {% endwith %}
-        
+
         <form action="/upload" method="post" enctype="multipart/form-data" id="uploadForm">
             <div class="upload-area">
                 <div class="upload-icon">📄</div>
@@ -139,16 +139,16 @@
                 </div>
                 <div class="file-name" id="fileName"></div>
             </div>
-            
+
             <button type="submit" class="btn-submit" id="submitBtn" disabled>Prześlij i przejdź do przeglądu</button>
         </form>
     </div>
-    
+
     <script>
         const fileInput = document.getElementById('pdf_file');
         const fileName = document.getElementById('fileName');
         const submitBtn = document.getElementById('submitBtn');
-        
+
         fileInput.addEventListener('change', function(e) {
             if (e.target.files.length > 0) {
                 fileName.textContent = 'Wybrany plik: ' + e.target.files[0].name;
@@ -161,4 +161,3 @@
     </script>
 </body>
 </html>
-

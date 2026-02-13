@@ -75,10 +75,11 @@ Remember: Feedback that uses soft, observational language ("na podstawie CV", "C
 {format_instructions}
 """
 
+
 # Simple wrapper class to maintain compatibility with .format() calls
 class VALIDATION_PROMPT:
     def format(self, **kwargs):
         return VALIDATION_PROMPT_TEMPLATE.format(**kwargs)
 
-VALIDATION_PROMPT = VALIDATION_PROMPT()
 
+VALIDATION_PROMPT = VALIDATION_PROMPT()

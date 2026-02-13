@@ -107,10 +107,11 @@ Language objects must have:
 Return ONLY valid JSON matching this exact structure. Do not nest personal_information or use alternative field names.
 """
 
+
 # Simple wrapper class to maintain compatibility with .format() calls
 class CV_PARSING_PROMPT:
     def format(self, **kwargs):
         return CV_PARSING_PROMPT_TEMPLATE.format(**kwargs)
 
-CV_PARSING_PROMPT = CV_PARSING_PROMPT()
 
+CV_PARSING_PROMPT = CV_PARSING_PROMPT()

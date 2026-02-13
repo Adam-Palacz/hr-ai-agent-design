@@ -6,7 +6,7 @@ job_offer:
     We are looking for an experienced DevOps Engineer to join our team.
     You will be responsible for designing, implementing, and maintaining
     our cloud infrastructure, CI/CD pipelines, and automation systems.
-    
+
     Required Qualifications:
     - 5+ years of experience in DevOps/Cloud Engineering
     - Strong knowledge of AWS and/or Azure
@@ -15,14 +15,14 @@ job_offer:
     - Experience with CI/CD tools (GitLab CI, GitHub Actions, Jenkins)
     - Knowledge of Kubernetes and containerization
     - Strong problem-solving and communication skills
-    
+
     Nice to Have:
     - Experience with MLOps
     - Knowledge of monitoring tools (Prometheus, Grafana)
     - Certifications (AWS, Azure, Kubernetes)
     - Experience with Ansible
     - Knowledge of security best practices
-    
+
     Benefits:
     - Remote work
     - Flexible working hours
@@ -33,11 +33,10 @@ job_offer:
 hr_feedback:
   decision: "rejected"  # accepted, rejected, or pending
   notes: |
-    Candidate has strong technical background in cloud platforms and excellent experience 
-    with Infrastructure as Code. Good communication skills and relevant certifications. 
-    However, could benefit from more Kubernetes production experience and has limited 
-    experience with MLOps tools. We cannot accept you for this role at the moment. 
+    Candidate has strong technical background in cloud platforms and excellent experience
+    with Infrastructure as Code. Good communication skills and relevant certifications.
+    However, could benefit from more Kubernetes production experience and has limited
+    experience with MLOps tools. We cannot accept you for this role at the moment.
     Please try again in the future.
   interviewer_name: "HR Team"
   missing_requirements: []
-

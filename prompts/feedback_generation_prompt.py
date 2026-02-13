@@ -41,7 +41,7 @@ You MUST analyze the HR notes and extract:
 - Areas for improvement (weaknesses, gaps, concerns mentioned)
 Then use this extracted information along with the CV to create comprehensive feedback.
 
-CRITICAL LANGUAGE REQUIREMENT: 
+CRITICAL LANGUAGE REQUIREMENT:
 - You MUST write the ENTIRE response in POLISH (język polski)
 - Use natural, conversational Polish - as if speaking to a friend or colleague
 - Avoid overly formal or corporate language
@@ -254,10 +254,11 @@ You MUST return the ACTUAL HTML content in the html_content field, not a descrip
 Remember: Return ACTUAL DATA with real HTML content, not a schema description. The html_content field must contain the complete, ready-to-send HTML email.
 """
 
+
 # Simple wrapper class to maintain compatibility with .format() calls
 class FEEDBACK_GENERATION_PROMPT:
     def format(self, **kwargs):
         return FEEDBACK_GENERATION_PROMPT_TEMPLATE.format(**kwargs)
 
-FEEDBACK_GENERATION_PROMPT = FEEDBACK_GENERATION_PROMPT()
 
+FEEDBACK_GENERATION_PROMPT = FEEDBACK_GENERATION_PROMPT()

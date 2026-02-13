@@ -14,14 +14,14 @@ from utils.json_parser import parse_json_safe
 
 class FeedbackValidatorAgent(BaseAgent):
     """Agent for validating candidate feedback emails."""
-    
+
     def __init__(
         self,
         model_name: str = "gpt-4o",
         temperature: float = 0.0,
         api_key: Optional[str] = None,
         timeout: int = 120,
-        max_retries: int = 2
+        max_retries: int = 2,
     ):
         """
         Initialize Feedback Validator Agent using Azure OpenAI SDK (no LangChain).
@@ -33,12 +33,12 @@ class FeedbackValidatorAgent(BaseAgent):
             "Return ONLY a single JSON object with the following structure:\n"
             "{\n"
             '  "status": "approved" | "rejected",\n'
-            "  \"is_approved\": true | false,\n"
-            "  \"reasoning\": \"short explanation\",\n"
-            "  \"issues_found\": [\"issue 1\", \"issue 2\"],\n"
-            "  \"ethical_concerns\": [\"concern 1\", \"concern 2\"],\n"
-            "  \"factual_errors\": [\"error 1\", \"error 2\"],\n"
-            "  \"suggestions\": [\"suggestion 1\", \"suggestion 2\"]\n"
+            '  "is_approved": true | false,\n'
+            '  "reasoning": "short explanation",\n'
+            '  "issues_found": ["issue 1", "issue 2"],\n'
+            '  "ethical_concerns": ["concern 1", "concern 2"],\n'
+            '  "factual_errors": ["error 1", "error 2"],\n'
+            '  "suggestions": ["suggestion 1", "suggestion 2"]\n'
             "}\n\n"
             "- Do NOT return a JSON schema or description.\n"
             "- Do NOT wrap the JSON in markdown code fences.\n"
@@ -47,7 +47,7 @@ class FeedbackValidatorAgent(BaseAgent):
 
         # Store prompt template
         self.prompt_template = VALIDATION_PROMPT
-    
+
     def validate_feedback(
         self,
         html_content: str,
@@ -55,22 +55,22 @@ class FeedbackValidatorAgent(BaseAgent):
         hr_feedback: HRFeedback,
         job_offer: Optional[JobOffer] = None,
         candidate_id: Optional[int] = None,
-        validation_number: Optional[int] = None
+        validation_number: Optional[int] = None,
     ) -> ValidationResult:
         """
         Validate feedback email using Azure OpenAI (no LangChain).
         """
         logger.info(f"Validating feedback email for: {cv_data.full_name}")
-        
+
         # Format data for prompt
         cv_data_str = self._format_cv_data(cv_data)
         hr_feedback_str = self._format_hr_feedback(hr_feedback)
-        
+
         if job_offer:
             job_offer_str = self._format_job_offer(job_offer)
         else:
             job_offer_str = "No job offer information provided"
-        
+
         # Build prompt with format instructions
         prompt_text = self.prompt_template.format(
             html_content=html_content,
@@ -122,7 +122,9 @@ class FeedbackValidatorAgent(BaseAgent):
             )
 
             validation_result = self._parse_validation_from_text(raw_text)
-            logger.info(f"Validation completed for {cv_data.full_name}: {validation_result.status.value}")
+            logger.info(
+                f"Validation completed for {cv_data.full_name}: {validation_result.status.value}"
+            )
             return validation_result
         except Exception as e:
             error_msg = f"Failed to validate feedback: {str(e)}"
@@ -175,5 +177,3 @@ class FeedbackValidatorAgent(BaseAgent):
             factual_errors=ensure_str_list(factual_errors),
             suggestions=ensure_str_list(suggestions),
         )
-    
-

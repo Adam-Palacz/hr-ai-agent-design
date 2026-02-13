@@ -62,10 +62,11 @@ IMPORTANT OUTPUT REQUIREMENTS:
 {format_instructions}
 """
 
+
 # Simple wrapper class to maintain compatibility with .format() calls
 class CORRECTION_PROMPT:
     def format(self, **kwargs):
         return CORRECTION_PROMPT_TEMPLATE.format(**kwargs)
 
-CORRECTION_PROMPT = CORRECTION_PROMPT()
 
+CORRECTION_PROMPT = CORRECTION_PROMPT()

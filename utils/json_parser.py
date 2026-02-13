@@ -39,30 +39,30 @@ def extract_json_from_text(text: str) -> Optional[str]:
 def parse_json_safe(text: str, fallback_to_extraction: bool = True) -> Dict[str, Any]:
     """
     Safely parse JSON from text, handling common issues.
-    
+
     Args:
         text: Text containing JSON
         fallback_to_extraction: If True, try to extract JSON using regex if direct parsing fails
-        
+
     Returns:
         Parsed JSON as dictionary
-        
+
     Raises:
         ValueError: If JSON cannot be parsed
     """
     if not text or not text.strip():
         raise ValueError("Empty text provided for JSON parsing")
-    
+
     # Strip code fences
     cleaned_text = strip_code_fences(text)
-    
+
     # Try direct JSON parsing
     try:
         return json.loads(cleaned_text)
     except json.JSONDecodeError:
         if not fallback_to_extraction:
             raise ValueError(f"Could not parse JSON: {cleaned_text[:500]}")
-        
+
         # Try to extract JSON using regex
         extracted = extract_json_from_text(cleaned_text)
         if extracted:
@@ -70,6 +70,5 @@ def parse_json_safe(text: str, fallback_to_extraction: bool = True) -> Dict[str,
                 return json.loads(extracted)
             except json.JSONDecodeError:
                 pass
-        
-        raise ValueError(f"Could not parse JSON from text: {cleaned_text[:500]}")
 
+        raise ValueError(f"Could not parse JSON from text: {cleaned_text[:500]}")

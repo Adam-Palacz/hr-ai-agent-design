@@ -106,10 +106,10 @@
 <body>
     <div class="container">
         <a href="{{ url_for('candidate_detail', candidate_id=candidate.id) }}" class="btn-back">← Powrót do kandydata</a>
-        
+
         <h1>✏️ Edytuj Kandydata</h1>
         <p class="subtitle">Zaktualizuj informacje o kandydacie</p>
-        
+
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -117,29 +117,29 @@
                 {% endfor %}
             {% endif %}
         {% endwith %}
-        
+
         {% if candidate.cv_path %}
         <div class="current-cv">
             <strong>Obecny plik CV:</strong> {{ candidate.cv_path.split('/')[-1] or candidate.cv_path.split('\\')[-1] }}
         </div>
         {% endif %}
-        
+
         <form action="{{ url_for('edit_candidate', candidate_id=candidate.id) }}" method="post" enctype="multipart/form-data">
             <div class="form-group">
                 <label for="first_name">Imię <span class="required">*</span></label>
                 <input type="text" name="first_name" id="first_name" value="{{ candidate.first_name }}" required>
             </div>
-            
+
             <div class="form-group">
                 <label for="last_name">Nazwisko <span class="required">*</span></label>
                 <input type="text" name="last_name" id="last_name" value="{{ candidate.last_name }}" required>
             </div>
-            
+
             <div class="form-group">
                 <label for="email">Email <span class="required">*</span></label>
                 <input type="email" name="email" id="email" value="{{ candidate.email }}" required>
             </div>
-            
+
             <div class="form-group">
                 <label for="position_id">Stanowisko</label>
                 <select name="position_id" id="position_id">
@@ -151,13 +151,13 @@
                     {% endfor %}
                 </select>
             </div>
-            
+
             <div class="form-group">
                 <label for="cv_file">Nowy plik CV (PDF)</label>
                 <input type="file" name="cv_file" id="cv_file" accept=".pdf">
                 <small style="display: block; margin-top: 5px; color: #666;">Zostaw puste, aby zachować obecny plik</small>
             </div>
-            
+
             <div class="form-group">
                 <label for="consent_for_other_positions">Zgoda na rozważenie do innych stanowisk</label>
                 <select name="consent_for_other_positions" id="consent_for_other_positions" required>
@@ -166,11 +166,9 @@
                 </select>
                 <small style="display: block; margin-top: 5px; color: #666;">Czy kandydat wyraził zgodę na rozważenie do innych stanowisk?</small>
             </div>
-            
+
             <button type="submit" class="btn-submit">Zaktualizuj Kandydata</button>
         </form>
     </div>
 </body>
 </html>
-
-

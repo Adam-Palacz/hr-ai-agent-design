@@ -13,14 +13,14 @@ from utils.json_parser import parse_json_safe
 
 class FeedbackAgent(BaseAgent):
     """Agent for generating personalized feedback to candidates."""
-    
+
     def __init__(
         self,
         model_name: str = "gpt-3.5-turbo",
         temperature: float = 0.7,
         api_key: Optional[str] = None,
         timeout: int = 120,
-        max_retries: int = 2
+        max_retries: int = 2,
     ):
         """
         Initialize Feedback Agent using Azure OpenAI SDK (no LangChain).
@@ -30,7 +30,7 @@ class FeedbackAgent(BaseAgent):
         # Static format instructions (we no longer rely on LangChain parsers)
         self.format_instructions = (
             "Return ONLY a single JSON object with the following structure:\n"
-            '{\n'
+            "{\n"
             '  "html_content": "<!DOCTYPE html>\\n<html>...complete email HTML...</html>"\n'
             "}\n\n"
             "- Do NOT return a JSON schema, OpenAPI schema, or description of fields.\n"
@@ -41,7 +41,7 @@ class FeedbackAgent(BaseAgent):
 
         # Store prompt template for later use
         self.prompt_template = FEEDBACK_GENERATION_PROMPT
-    
+
     def generate_feedback(
         self,
         cv_data: CVData,
@@ -49,32 +49,34 @@ class FeedbackAgent(BaseAgent):
         job_offer: Optional[JobOffer] = None,
         output_format: FeedbackFormat = FeedbackFormat.HTML,
         candidate_id: Optional[int] = None,
-        recruitment_stage: Optional[str] = None
+        recruitment_stage: Optional[str] = None,
     ) -> CandidateFeedback:
         """
         Generate personalized feedback for a candidate using Azure OpenAI.
         """
         # Convert CV data to formatted string
         cv_data_str = self._format_cv_data(cv_data)
-        
+
         # Convert HR feedback to formatted string (with extraction note for feedback generation)
         hr_feedback_str = self._format_hr_feedback(hr_feedback, include_extraction_note=True)
-        
+
         # Convert job offer to formatted string
         if job_offer:
             job_offer_str = self._format_job_offer(job_offer)
         else:
             job_offer_str = "No job offer information provided"
-        
+
         # Get candidate name
         candidate_name = cv_data.full_name
-        
+
         # Format output format for prompt
-        format_str = output_format.value if isinstance(output_format, FeedbackFormat) else str(output_format)
-        
+        format_str = (
+            output_format.value if isinstance(output_format, FeedbackFormat) else str(output_format)
+        )
+
         # Format recruitment stage for prompt
         recruitment_stage_str = recruitment_stage or "Pierwsza selekcja"
-        
+
         # Build prompt with format instructions and output format
         prompt_text = self.prompt_template.format(
             cv_data=cv_data_str,
@@ -87,8 +89,11 @@ class FeedbackAgent(BaseAgent):
         )
 
         # Call Azure OpenAI chat completions
+        raw_text = None
         try:
-            logger.info(f"Generating feedback for candidate: {candidate_name} (stage: {recruitment_stage_str})")
+            logger.info(
+                f"Generating feedback for candidate: {candidate_name} (stage: {recruitment_stage_str})"
+            )
 
             response = self.client.chat.completions.create(
                 model=self.model_name,
@@ -129,13 +134,17 @@ class FeedbackAgent(BaseAgent):
             logger.info(f"Feedback generated successfully for {candidate_name}")
             return feedback
         except Exception as e:
-            # Fallback: try to parse whatever we got in `raw_text`
-            try:
-                feedback = self._parse_feedback_from_text(raw_text)
-                logger.warning("Feedback parsed using fallback parser after initial error.")
-                return feedback
-            except Exception as final_error:
-                raise Exception(f"Failed to parse feedback: {str(final_error)}. Original error: {str(e)}")
+            # Fallback: try to parse whatever we got in `raw_text` (only if assigned)
+            if raw_text is not None:
+                try:
+                    feedback = self._parse_feedback_from_text(raw_text)
+                    logger.warning("Feedback parsed using fallback parser after initial error.")
+                    return feedback
+                except Exception as final_error:
+                    raise Exception(
+                        f"Failed to parse feedback: {str(final_error)}. Original error: {str(e)}"
+                    ) from e
+            raise
 
     def _parse_feedback_from_text(self, text: str) -> CandidateFeedback:
         """
@@ -180,7 +189,3 @@ class FeedbackAgent(BaseAgent):
             "</body>\n"
             "</html>"
         )
-    
-    
-    
-
