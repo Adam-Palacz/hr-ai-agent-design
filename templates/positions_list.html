@@ -148,12 +148,12 @@
 <body>
     <div class="container">
         <a href="{{ url_for('index') }}" class="btn-back">← Powrót do listy kandydatów</a>
-        
+
         <div class="header">
             <h1>💼 Lista Pozycji</h1>
             <a href="{{ url_for('add_position') }}" class="btn-add">+ Dodaj Pozycję</a>
         </div>
-        
+
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -161,7 +161,7 @@
                 {% endfor %}
             {% endif %}
         {% endwith %}
-        
+
         {% if positions %}
         <div class="positions-grid">
             {% for position in positions %}
@@ -195,5 +195,3 @@
     </div>
 </body>
 </html>
-
-

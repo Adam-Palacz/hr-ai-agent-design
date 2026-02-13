@@ -103,10 +103,11 @@ Remember: The goal is to ensure candidates receive accurate, helpful, and profes
 {format_instructions}
 """
 
+
 # Simple wrapper class to maintain compatibility with .format() calls
 class RAG_RESPONSE_VALIDATION_PROMPT:
     def format(self, **kwargs):
         return RAG_RESPONSE_VALIDATION_PROMPT_TEMPLATE.format(**kwargs)
 
-RAG_RESPONSE_VALIDATION_PROMPT = RAG_RESPONSE_VALIDATION_PROMPT()
 
+RAG_RESPONSE_VALIDATION_PROMPT = RAG_RESPONSE_VALIDATION_PROMPT()

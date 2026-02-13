@@ -2,7 +2,7 @@
 Agent for generating responses to email inquiries.
 Can use basic knowledge or RAG from the vector database.
 """
-import json
+
 from typing import Dict, List, Optional
 from agents.base_agent import BaseAgent
 from core.logger import logger
@@ -13,12 +13,13 @@ class QueryResponderAgent(BaseAgent):
     Agent that generates responses to email inquiries.
     Can use basic knowledge or RAG from the vector database.
     """
-    
+
     def __init__(self, model_name: str = None, temperature: float = 0.7):
         from config import settings
+
         model_name = model_name or settings.openai_model
         super().__init__(model_name=model_name, temperature=temperature)
-        
+
         # Basic knowledge
         self.basic_knowledge = """
 PODSTAWOWA WIEDZA O REKRUTACJI:
@@ -50,50 +51,48 @@ PODSTAWOWA WIEDZA O REKRUTACJI:
 5. Podpis w emailach:
 - "Z wyrazami szacunku\n\nDział HR"
 """
-    
+
     def generate_response(
         self,
         email_subject: str,
         email_body: str,
         sender_email: str,
-        rag_context: Optional[List[Dict]] = None
+        rag_context: Optional[List[Dict]] = None,
     ) -> Optional[str]:
         """
         Generate a response to an email inquiry.
-        
+
         Args:
             email_subject: Email subject
             email_body: Email body content
             sender_email: Sender email address
             rag_context: RAG context (list of documents from the vector database)
-        
+
         Returns:
             Generated response or None if the agent is not confident (then forward to HR)
         """
-        prompt = self._create_response_prompt(
-            email_subject, email_body, sender_email, rag_context
-        )
-        
+        prompt = self._create_response_prompt(email_subject, email_body, sender_email, rag_context)
+
         try:
             response = self.client.chat.completions.create(
                 model=self.model_name,
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an HR department assistant. You respond to candidate inquiries in a professional, friendly, and helpful manner. You MUST always write responses in POLISH (Polish language). Always end your response with the signature 'Z wyrazami szacunku\n\nDział HR'. If you are not certain of the answer, return the special value: 'FORWARD_TO_HR'."
+                        "content": "You are an HR department assistant. You respond to candidate inquiries in a professional, friendly, and helpful manner. You MUST always write responses in POLISH (Polish language). Always end your response with the signature 'Z wyrazami szacunku\n\nDział HR'. If you are not certain of the answer, return the special value: 'FORWARD_TO_HR'.",
                     },
-                    {"role": "user", "content": prompt}
+                    {"role": "user", "content": prompt},
                 ],
-                temperature=self.temperature
+                temperature=self.temperature,
             )
-            
+
             response_text = response.choices[0].message.content.strip()
-            
+
             # Check if agent returned the forward-to-HR signal
             if response_text.upper() == "FORWARD_TO_HR" or "FORWARD_TO_HR" in response_text.upper():
                 logger.info("Agent returned FORWARD_TO_HR signal - not confident enough to answer")
                 return None
-            
+
             # Check if response contains uncertainty phrases (in Polish)
             uncertainty_phrases = [
                 "nie posiadamy szczegółowych informacji",
@@ -107,31 +106,33 @@ PODSTAWOWA WIEDZA O REKRUTACJI:
                 "przekazaliśmy je do hr",
                 "dziękujemy za pańskie zapytanie. przekazaliśmy",
                 "przekazaliśmy je do działu",
-                "skontaktuje się z państwem w najkrótszym możliwym terminie"  # Typical phrase when forwarding to HR
+                "skontaktuje się z państwem w najkrótszym możliwym terminie",  # Typical phrase when forwarding to HR
             ]
-            
+
             response_lower = response_text.lower()
             has_uncertainty = any(phrase in response_lower for phrase in uncertainty_phrases)
-            
+
             if has_uncertainty:
-                logger.warning(f"Response contains uncertainty phrases - agent not confident enough. Phrases found: {[p for p in uncertainty_phrases if p in response_lower]}")
+                logger.warning(
+                    f"Response contains uncertainty phrases - agent not confident enough. Phrases found: {[p for p in uncertainty_phrases if p in response_lower]}"
+                )
                 return None
-            
+
             # Add privacy policy link to the end of response (after signature)
             response_text = self._add_privacy_link(response_text)
-            
+
             return response_text
-            
+
         except Exception as e:
             logger.error(f"Error generating response: {str(e)}")
             return None
-    
+
     def _create_response_prompt(
         self,
         email_subject: str,
         email_body: str,
         sender_email: str,
-        rag_context: Optional[List[Dict]] = None
+        rag_context: Optional[List[Dict]] = None,
     ) -> str:
         """Create prompt for generating response."""
         context_section_english = ""
@@ -139,9 +140,11 @@ PODSTAWOWA WIEDZA O REKRUTACJI:
             context_section_english = "\n\nADDITIONAL CONTEXT FROM KNOWLEDGE BASE:\n"
             for i, doc in enumerate(rag_context, 1):
                 context_section_english += f"\n--- Document {i} ---\n"
-                context_section_english += f"Source: {doc.get('metadata', {}).get('source', 'N/A')}\n"
+                context_section_english += (
+                    f"Source: {doc.get('metadata', {}).get('source', 'N/A')}\n"
+                )
                 context_section_english += f"Content: {doc.get('document', '')}\n"
-        
+
         return f"""
 You are an HR assistant responding to candidate inquiries in the recruitment process.
 
@@ -193,11 +196,11 @@ REMEMBER:
 
 ODPOWIEDŹ:
 """
-    
+
     def _add_privacy_link(self, response_text: str) -> str:
         """Add privacy policy link to the end of AI-generated response."""
         from config import settings
-        
+
         # Find where the signature ends
         if "Z wyrazami szacunku" in response_text:
             # Add privacy link after signature
@@ -208,12 +211,10 @@ ODPOWIEDŹ:
                 privacy_text = f"\n\nInformacje o przetwarzaniu danych osobowych, w tym wykorzystaniu narzędzi AI znajdziesz na naszej stronie internetowe: {settings.company_website}"
             else:
                 privacy_text = '\n\nInformacje o przetwarzaniu danych osobowych, w tym wykorzystaniu narzędzi AI znajdziesz na naszej stronie internetowe: "https://www.example.com/privacy".'
-            
+
             # Insert privacy text after signature
             response_text = response_text.replace(
-                "Z wyrazami szacunku\n\nDział HR",
-                f"Z wyrazami szacunku\n\nDział HR{privacy_text}"
+                "Z wyrazami szacunku\n\nDział HR", f"Z wyrazami szacunku\n\nDział HR{privacy_text}"
             )
-        
-        return response_text
 
+        return response_text

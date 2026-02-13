@@ -59,4 +59,3 @@ Thumbs.db
 # Uploads (będzie w volume, ale kopiujemy strukturę)
 uploads/*.pdf
 uploads/*.html
-

@@ -1,4 +1,5 @@
 """Feedback generation service layer."""
+
 import time
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -11,7 +12,6 @@ from agents.correction_agent import FeedbackCorrectionAgent
 from models.cv_models import CVData
 from models.feedback_models import HRFeedback, CandidateFeedback, FeedbackFormat
 from models.job_models import JobOffer
-from models.validation_models import ValidationResult
 from utils.html_formatter import format_feedback_as_html
 
 # Import metrics service
@@ -23,17 +23,17 @@ except ImportError:
 
 class FeedbackService:
     """Service for generating candidate feedback."""
-    
+
     def __init__(
-        self, 
+        self,
         feedback_agent: FeedbackAgent,
         validator_agent: Optional[FeedbackValidatorAgent] = None,
         correction_agent: Optional[FeedbackCorrectionAgent] = None,
-        max_validation_iterations: int = 3
+        max_validation_iterations: int = 3,
     ):
         """
         Initialize feedback service.
-        
+
         Args:
             feedback_agent: Initialized FeedbackAgent instance
             validator_agent: Optional FeedbackValidatorAgent instance (if None, validation is skipped)
@@ -47,7 +47,7 @@ class FeedbackService:
         self.validation_failed = False
         self.validation_error_info = None
         logger.info("FeedbackService initialized")
-    
+
     def generate_feedback(
         self,
         cv_data: CVData,
@@ -58,11 +58,11 @@ class FeedbackService:
         output_dir: Optional[Path] = None,
         enable_validation: bool = True,
         candidate_id: Optional[int] = None,
-        recruitment_stage: Optional[str] = None
+        recruitment_stage: Optional[str] = None,
     ) -> tuple[CandidateFeedback, bool, Optional[Dict[str, Any]]]:
         """
         Generate personalized feedback for candidate with optional validation and correction.
-        
+
         Args:
             cv_data: Parsed CV data
             hr_feedback: HR evaluation feedback
@@ -71,55 +71,60 @@ class FeedbackService:
             save_to_file: Whether to save feedback to file
             output_dir: Directory to save feedback file (default: current directory)
             enable_validation: Whether to enable validation and correction (default: True)
-            
+
         Returns:
             Tuple of (CandidateFeedback, is_validated: bool, error_info: Optional[Dict])
             - is_validated: True if feedback was validated successfully, False if validation failed
             - error_info: Dict with error details if validation failed, None otherwise
-            
+
         Raises:
             LLMError: If feedback generation fails
         """
         logger.info(f"Generating feedback for: {cv_data.full_name} (format: {output_format.value})")
-        
+
         # Start timing for overall feedback generation
         generation_start_time = time.time()
-        
+
         try:
             # Step 1: Generate initial feedback (with timing)
             feedback_start_time = time.time()
-            feedback = self.agent.generate_feedback(cv_data, hr_feedback, job_offer, output_format=output_format, candidate_id=candidate_id, recruitment_stage=recruitment_stage)
+            feedback = self.agent.generate_feedback(
+                cv_data,
+                hr_feedback,
+                job_offer,
+                output_format=output_format,
+                candidate_id=candidate_id,
+                recruitment_stage=recruitment_stage,
+            )
             feedback_duration = time.time() - feedback_start_time
-            
+
             # Record timing metric for feedback generation
             if metrics_service:
                 metrics_service.record_timing(
                     metric_type="feedback_generation",
                     operation_name="generate_feedback",
                     duration_seconds=feedback_duration,
-                    metadata={"candidate_id": candidate_id, "recruitment_stage": recruitment_stage}
+                    metadata={"candidate_id": candidate_id, "recruitment_stage": recruitment_stage},
                 )
-            
-            logger.info(f"Successfully generated initial feedback for: {cv_data.full_name} (took {feedback_duration:.2f}s)")
-            
+
+            logger.info(
+                f"Successfully generated initial feedback for: {cv_data.full_name} (took {feedback_duration:.2f}s)"
+            )
+
             # Step 2: Validate and correct if validation is enabled
             is_validated = True
             validation_error_info = None
             if enable_validation and self.validator and self.corrector:
                 feedback, is_validated, validation_error_info = self._validate_and_correct(
-                    feedback, 
-                    cv_data, 
-                    hr_feedback, 
-                    job_offer,
-                    candidate_id=candidate_id
+                    feedback, cv_data, hr_feedback, job_offer, candidate_id=candidate_id
                 )
                 # Store validation status for potential error saving
                 self.validation_failed = not is_validated
                 self.validation_error_info = validation_error_info
-            
+
             # Calculate total generation time
             total_duration = time.time() - generation_start_time
-            
+
             # Record total timing metric
             if metrics_service:
                 metrics_service.record_timing(
@@ -130,54 +135,56 @@ class FeedbackService:
                         "candidate_id": candidate_id,
                         "recruitment_stage": recruitment_stage,
                         "is_validated": is_validated,
-                        "validation_enabled": enable_validation
-                    }
+                        "validation_enabled": enable_validation,
+                    },
                 )
-                
+
                 # Record success metric
                 metrics_service.record_success(
                     metric_type="feedback_generation",
                     operation_name="generate_feedback",
                     success=is_validated,
-                    metadata={"candidate_id": candidate_id}
+                    metadata={"candidate_id": candidate_id},
                 )
-            
-            logger.info(f"Feedback generation completed for: {cv_data.full_name} (total: {total_duration:.2f}s, validated: {is_validated})")
-            
+
+            logger.info(
+                f"Feedback generation completed for: {cv_data.full_name} (total: {total_duration:.2f}s, validated: {is_validated})"
+            )
+
             # Return feedback with validation status
             return feedback, is_validated, validation_error_info
-            
+
             if save_to_file:
                 # Save HTML feedback (only format we support now)
-                    if feedback.html_content:
-                        html_path = self._save_feedback_html(feedback, cv_data, output_dir)
-                        logger.info(f"HTML feedback saved to: {html_path}")
-            
+                if feedback.html_content:
+                    html_path = self._save_feedback_html(feedback, cv_data, output_dir)
+                    logger.info(f"HTML feedback saved to: {html_path}")
+
             return feedback
-            
+
         except Exception as e:
             error_msg = f"Failed to generate feedback: {str(e)}"
             logger.error(error_msg, exc_info=True)
             raise LLMError(error_msg) from e
-    
+
     def _validate_and_correct(
         self,
         feedback: CandidateFeedback,
         cv_data: CVData,
         hr_feedback: HRFeedback,
         job_offer: Optional[JobOffer] = None,
-        candidate_id: Optional[int] = None
+        candidate_id: Optional[int] = None,
     ) -> tuple[CandidateFeedback, bool, Optional[Dict[str, Any]]]:
         """
         Validate feedback and correct if needed.
-        
+
         Args:
             feedback: Initial CandidateFeedback object
             cv_data: Parsed CV data
             hr_feedback: HR evaluation feedback
             job_offer: Optional job offer information
             candidate_id: Optional candidate ID
-            
+
         Returns:
             Tuple of (CandidateFeedback, is_validated: bool, error_info: Optional[Dict])
             - is_validated: True if feedback was approved, False if validation failed after max iterations
@@ -187,11 +194,13 @@ class FeedbackService:
         iteration = 0
         all_validation_results = []
         validation_start_time = time.time()
-        
+
         while iteration < self.max_iterations:
             iteration += 1
-            logger.info(f"Validation iteration {iteration}/{self.max_iterations} for {cv_data.full_name}")
-            
+            logger.info(
+                f"Validation iteration {iteration}/{self.max_iterations} for {cv_data.full_name}"
+            )
+
             # Validate current feedback (with timing)
             validation_iter_start = time.time()
             validation_result = self.validator.validate_feedback(
@@ -200,10 +209,10 @@ class FeedbackService:
                 hr_feedback,
                 job_offer,
                 candidate_id=candidate_id,
-                validation_number=iteration
+                validation_number=iteration,
             )
             validation_iter_duration = time.time() - validation_iter_start
-            
+
             # Record timing metric for validation
             if metrics_service:
                 metrics_service.record_timing(
@@ -213,32 +222,36 @@ class FeedbackService:
                     metadata={
                         "candidate_id": candidate_id,
                         "iteration": iteration,
-                        "is_approved": validation_result.is_approved
-                    }
+                        "is_approved": validation_result.is_approved,
+                    },
                 )
-            
+
             # Store validation result
-            all_validation_results.append({
-                'iteration': iteration,
-                'is_approved': validation_result.is_approved,
-                'status': validation_result.status.value,
-                'reasoning': validation_result.reasoning,
-                'issues_found': validation_result.issues_found,
-                'ethical_concerns': validation_result.ethical_concerns,
-                'factual_errors': validation_result.factual_errors,
-                'suggestions': validation_result.suggestions
-            })
-            
+            all_validation_results.append(
+                {
+                    "iteration": iteration,
+                    "is_approved": validation_result.is_approved,
+                    "status": validation_result.status.value,
+                    "reasoning": validation_result.reasoning,
+                    "issues_found": validation_result.issues_found,
+                    "ethical_concerns": validation_result.ethical_concerns,
+                    "factual_errors": validation_result.factual_errors,
+                    "suggestions": validation_result.suggestions,
+                }
+            )
+
             if validation_result.is_approved:
-                logger.info(f"Feedback approved after {iteration} iteration(s) for {cv_data.full_name}")
+                logger.info(
+                    f"Feedback approved after {iteration} iteration(s) for {cv_data.full_name}"
+                )
                 return current_feedback, True, None
-            
+
             # Feedback was rejected, need to correct
             logger.warning(
                 f"Feedback rejected in iteration {iteration} for {cv_data.full_name}. "
                 f"Reason: {validation_result.reasoning}"
             )
-            
+
             if iteration >= self.max_iterations:
                 logger.error(
                     f"Maximum validation iterations ({self.max_iterations}) reached for {cv_data.full_name}. "
@@ -246,18 +259,20 @@ class FeedbackService:
                 )
                 # Return error info with summary
                 total_validations = len(all_validation_results)
-                total_corrections = sum(1 for r in all_validation_results if 'correction_number' in r)
+                total_corrections = sum(
+                    1 for r in all_validation_results if "correction_number" in r
+                )
                 error_info = {
-                    'validation_results': all_validation_results,
-                    'final_feedback_html': current_feedback.html_content,
-                    'max_iterations_reached': True,
-                    'total_validations': total_validations,
-                    'total_corrections': total_corrections,
-                    'last_validation_number': total_validations,
-                    'last_correction_number': total_corrections
+                    "validation_results": all_validation_results,
+                    "final_feedback_html": current_feedback.html_content,
+                    "max_iterations_reached": True,
+                    "total_validations": total_validations,
+                    "total_corrections": total_corrections,
+                    "last_validation_number": total_validations,
+                    "last_correction_number": total_corrections,
                 }
                 return current_feedback, False, error_info
-            
+
             # Correct the feedback (with timing)
             try:
                 correction_start = time.time()
@@ -268,30 +283,27 @@ class FeedbackService:
                     hr_feedback,
                     job_offer,
                     candidate_id=candidate_id,
-                    correction_number=iteration
+                    correction_number=iteration,
                 )
                 correction_duration = time.time() - correction_start
-                
+
                 # Record timing metric for correction
                 if metrics_service:
                     metrics_service.record_timing(
                         metric_type="validation",
                         operation_name="correct_feedback",
                         duration_seconds=correction_duration,
-                        metadata={
-                            "candidate_id": candidate_id,
-                            "iteration": iteration
-                        }
+                        metadata={"candidate_id": candidate_id, "iteration": iteration},
                     )
-                
+
                 # Update current feedback with corrected version
                 current_feedback = CandidateFeedback(html_content=corrected.html_content)
-                
+
                 # Add correction number to the last validation result
                 if all_validation_results:
-                    all_validation_results[-1]['correction_number'] = iteration
-                    all_validation_results[-1]['corrections_made'] = corrected.corrections_made
-                
+                    all_validation_results[-1]["correction_number"] = iteration
+                    all_validation_results[-1]["corrections_made"] = corrected.corrections_made
+
                 logger.info(
                     f"Feedback corrected for {cv_data.full_name} (correction #{iteration}). "
                     f"Corrections made: {', '.join(corrected.corrections_made)}"
@@ -300,49 +312,49 @@ class FeedbackService:
                 logger.error(f"Failed to correct feedback in iteration {iteration}: {str(e)}")
                 # If correction fails, return error info
                 total_validations = len(all_validation_results)
-                total_corrections = sum(1 for r in all_validation_results if 'correction_number' in r)
+                total_corrections = sum(
+                    1 for r in all_validation_results if "correction_number" in r
+                )
                 error_info = {
-                    'validation_results': all_validation_results,
-                    'final_feedback_html': current_feedback.html_content,
-                    'correction_failed': True,
-                    'correction_error': str(e),
-                    'total_validations': total_validations,
-                    'total_corrections': total_corrections,
-                    'last_validation_number': total_validations,
-                    'failed_correction_number': iteration
+                    "validation_results": all_validation_results,
+                    "final_feedback_html": current_feedback.html_content,
+                    "correction_failed": True,
+                    "correction_error": str(e),
+                    "total_validations": total_validations,
+                    "total_corrections": total_corrections,
+                    "last_validation_number": total_validations,
+                    "failed_correction_number": iteration,
                 }
                 return current_feedback, False, error_info
-        
+
         # Should not reach here, but return current feedback as fallback
         total_validation_duration = time.time() - validation_start_time
-        
+
         # Record total validation timing
         if metrics_service:
             metrics_service.record_timing(
                 metric_type="validation",
                 operation_name="total_validation_cycle",
                 duration_seconds=total_validation_duration,
-                metadata={
-                    "candidate_id": candidate_id,
-                    "iterations": len(all_validation_results)
-                }
+                metadata={"candidate_id": candidate_id, "iterations": len(all_validation_results)},
             )
-        
+
         total_validations = len(all_validation_results)
-        total_corrections = sum(1 for r in all_validation_results if 'correction_number' in r)
-        return current_feedback, False, {
-            'validation_results': all_validation_results,
-            'total_validations': total_validations,
-            'total_corrections': total_corrections
-        }
-    
+        total_corrections = sum(1 for r in all_validation_results if "correction_number" in r)
+        return (
+            current_feedback,
+            False,
+            {
+                "validation_results": all_validation_results,
+                "total_validations": total_validations,
+                "total_corrections": total_corrections,
+            },
+        )
+
     # _save_feedback method removed - we only use HTML format now
-    
+
     def _save_feedback_html(
-        self,
-        feedback: CandidateFeedback,
-        cv_data: CVData,
-        output_dir: Optional[Path] = None
+        self, feedback: CandidateFeedback, cv_data: CVData, output_dir: Optional[Path] = None
     ) -> Path:
         """Save feedback to HTML file."""
         if output_dir is None:
@@ -350,27 +362,30 @@ class FeedbackService:
         else:
             output_dir = Path(output_dir)
             output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         filename = f"feedback_{cv_data.full_name.replace(' ', '_')}.html"
         output_path = output_dir / filename
-        
+
         html_content = format_feedback_as_html(feedback)
-        
-        with open(output_path, 'w', encoding='utf-8') as f:
+
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(html_content)
-        
+
         return output_path
-    
-    def get_feedback_html(self, feedback: CandidateFeedback, consent_for_other_positions: bool = None) -> str:
+
+    def get_feedback_html(
+        self, feedback: CandidateFeedback, consent_for_other_positions: bool = None
+    ) -> str:
         """
         Get HTML formatted version of feedback.
-        
+
         Args:
             feedback: CandidateFeedback object
             consent_for_other_positions: Optional boolean indicating if candidate consented to other positions
-            
+
         Returns:
             HTML formatted string
         """
-        return format_feedback_as_html(feedback, consent_for_other_positions=consent_for_other_positions)
-
+        return format_feedback_as_html(
+            feedback, consent_for_other_positions=consent_for_other_positions
+        )

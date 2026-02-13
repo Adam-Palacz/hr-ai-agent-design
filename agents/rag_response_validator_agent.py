@@ -11,14 +11,14 @@ from utils.json_parser import parse_json_safe
 
 class RAGResponseValidatorAgent(BaseAgent):
     """Agent for validating RAG-generated responses to candidate inquiries."""
-    
+
     def __init__(
         self,
         model_name: str = "gpt-4o",
         temperature: float = 0.0,
         api_key: Optional[str] = None,
         timeout: int = 60,
-        max_retries: int = 2
+        max_retries: int = 2,
     ):
         """
         Initialize RAG Response Validator Agent using Azure OpenAI SDK (no LangChain).
@@ -44,7 +44,7 @@ class RAGResponseValidatorAgent(BaseAgent):
 
         # Store prompt template
         self.prompt_template = RAG_RESPONSE_VALIDATION_PROMPT
-    
+
     def validate_rag_response(
         self,
         generated_response: str,
@@ -52,11 +52,11 @@ class RAGResponseValidatorAgent(BaseAgent):
         email_body: str,
         sender_email: str,
         rag_sources: List[Dict],
-        validation_number: Optional[int] = None
+        validation_number: Optional[int] = None,
     ) -> ValidationResult:
         """
         Validate RAG-generated response using Azure OpenAI (no LangChain).
-        
+
         Args:
             generated_response: The AI-generated response to validate
             email_subject: Original email subject
@@ -64,15 +64,15 @@ class RAGResponseValidatorAgent(BaseAgent):
             sender_email: Sender's email address
             rag_sources: List of RAG source documents used to generate the response
             validation_number: Optional validation number for tracking
-        
+
         Returns:
             ValidationResult object
         """
         logger.info(f"Validating RAG response for inquiry from {sender_email}")
-        
+
         # Format RAG sources for prompt
         rag_sources_str = self._format_rag_sources(rag_sources)
-        
+
         # Build prompt with format instructions
         prompt_text = self.prompt_template.format(
             generated_response=generated_response,
@@ -134,20 +134,20 @@ class RAGResponseValidatorAgent(BaseAgent):
         """Format RAG sources for prompt."""
         if not rag_sources:
             return "No RAG sources provided."
-        
+
         formatted = []
         for i, source in enumerate(rag_sources, 1):
-            metadata = source.get('metadata', {})
-            document = source.get('document', '')
-            source_name = metadata.get('source', 'Unknown source')
-            score = metadata.get('score', None)
-            
+            metadata = source.get("metadata", {})
+            document = source.get("document", "")
+            source_name = metadata.get("source", "Unknown source")
+            score = metadata.get("score", None)
+
             source_text = f"--- Source {i}: {source_name} ---\n"
             if score is not None:
                 source_text += f"Relevance score: {score:.4f}\n"
             source_text += f"Content:\n{document}\n"
             formatted.append(source_text)
-        
+
         return "\n".join(formatted)
 
     def _parse_validation_from_text(self, text: str) -> ValidationResult:
@@ -186,4 +186,3 @@ class RAGResponseValidatorAgent(BaseAgent):
             factual_errors=ensure_str_list(factual_errors),
             suggestions=ensure_str_list(suggestions),
         )
-

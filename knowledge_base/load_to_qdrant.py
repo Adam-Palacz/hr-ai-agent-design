@@ -1,6 +1,7 @@
 """
 Script to load documents from knowledge_base into Qdrant.
 """
+
 import os
 import sys
 from pathlib import Path
@@ -19,23 +20,23 @@ def load_documents_from_files(directory: str = "knowledge_base") -> list:
     documents = []
     metadatas = []
     ids = []
-    
+
     knowledge_path = Path(directory)
     if not knowledge_path.exists():
         print(f"❌ Directory {directory} does not exist!")
         return documents, metadatas, ids
-    
+
     txt_files = list(knowledge_path.glob("*.txt"))
     if not txt_files:
         print(f"⚠️ No .txt files in directory {directory}")
         return documents, metadatas, ids
-    
+
     print(f"📚 Found {len(txt_files)} files in {directory}:")
-    
+
     for file_path in txt_files:
         print(f"   - {file_path.name}")
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read().strip()
                 if content:
                     documents.append(content)
@@ -44,13 +45,13 @@ def load_documents_from_files(directory: str = "knowledge_base") -> list:
                     metadata = {
                         "source": filename,
                         "file": file_path.name,
-                        "type": _classify_document_type(filename)
+                        "type": _classify_document_type(filename),
                     }
                     metadatas.append(metadata)
                     ids.append(f"kb_{filename}")
         except Exception as e:
             print(f"   ⚠️ Error loading {file_path.name}: {e}")
-    
+
     return documents, metadatas, ids
 
 
@@ -72,29 +73,29 @@ def main():
     print("=" * 60)
     print("LOADING KNOWLEDGE BASE TO QDRANT")
     print("=" * 60)
-    
+
     azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
     azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
     azure_deployment = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-3-small")
     azure_api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
-    
+
     if not azure_api_key:
         raise RuntimeError("AZURE_OPENAI_API_KEY is not set in .env")
-    
+
     # Load documents
     documents, metadatas, ids = load_documents_from_files("knowledge_base")
-    
+
     if not documents:
         print("❌ No documents to load!")
         return
-    
+
     print(f"\n📝 Prepared {len(documents)} documents for loading")
-    
+
     # Initialize Qdrant
     # Check whether to use Qdrant server or local database
     qdrant_host = os.getenv("QDRANT_HOST")
     qdrant_port = int(os.getenv("QDRANT_PORT", "6333")) if os.getenv("QDRANT_PORT") else None
-    
+
     try:
         if qdrant_host:
             # Use Qdrant server
@@ -107,7 +108,7 @@ def main():
                 azure_deployment=azure_deployment,
                 azure_api_version=azure_api_version,
                 qdrant_host=qdrant_host,
-                qdrant_port=qdrant_port
+                qdrant_port=qdrant_port,
             )
         else:
             # Use local database (default)
@@ -119,11 +120,15 @@ def main():
                 azure_api_key=azure_api_key,
                 azure_deployment=azure_deployment,
                 azure_api_version=azure_api_version,
-                qdrant_path="./qdrant_db"
+                qdrant_path="./qdrant_db",
             )
     except (RuntimeError, Exception) as e:
         error_str = str(e)
-        if "already accessed" in error_str or "AlreadyLocked" in error_str or "already locked" in error_str.lower():
+        if (
+            "already accessed" in error_str
+            or "AlreadyLocked" in error_str
+            or "already locked" in error_str.lower()
+        ):
             print("\n" + "=" * 60)
             print("❌ ERROR: Qdrant database is already in use!")
             print("=" * 60)
@@ -139,25 +144,21 @@ def main():
         else:
             print(f"\n❌ Unexpected error during Qdrant initialization: {error_str}")
             raise
-    
+
     # Load documents
-    print(f"\n📤 Loading documents into Qdrant...")
+    print("\n📤 Loading documents into Qdrant...")
     db.add_documents(documents, ids=ids, metadatas=metadatas)
-    
+
     print(f"\n✅ Loaded {len(documents)} documents into collection 'recruitment_knowledge_base'")
     print(f"📊 Total documents in collection: {db.count()}")
-    
+
     # Search test
     print("\n" + "=" * 60)
     print("SEARCH TEST")
     print("=" * 60)
-    
-    test_queries = [
-        "Jakie są etapy rekrutacji?",
-        "Co to jest RODO?",
-        "Jakie są wartości firmy?"
-    ]
-    
+
+    test_queries = ["Jakie są etapy rekrutacji?", "Co to jest RODO?", "Jakie są wartości firmy?"]
+
     for query in test_queries:
         print(f"\n❓ Pytanie: {query}")
         results = db.search(query, n_results=2)
@@ -168,7 +169,7 @@ def main():
                 print(f"      Excerpt: {r['document'][:100]}...")
         else:
             print("   No results")
-    
+
     print("\n" + "=" * 60)
     print("✅ Done!")
     print("=" * 60)
@@ -176,4 +177,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

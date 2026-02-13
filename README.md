@@ -14,10 +14,10 @@ Web application for HR teams to manage recruitment: review CVs, track candidates
 
 ## Tech stack
 
-- **Backend:** Python 3.11, Flask  
-- **AI:** Azure OpenAI (GPT, embeddings)  
-- **Vector DB:** Qdrant  
-- **Database:** SQLite  
+- **Backend:** Python 3.11, Flask
+- **AI:** Azure OpenAI (GPT, embeddings)
+- **Vector DB:** Qdrant
+- **Database:** SQLite
 - **Email:** SMTP (sending), IMAP (monitoring)
 
 ## Prerequisites
@@ -112,10 +112,10 @@ python app.py
 
 Open **http://localhost:5000**. You can:
 
-- Add candidates and upload CVs  
-- Manage positions and tickets  
-- Use **Process** (accept/reject) to move candidates and trigger AI feedback emails  
-- Open **Admin** for full candidate list, sent emails, and tickets  
+- Add candidates and upload CVs
+- Manage positions and tickets
+- Use **Process** (accept/reject) to move candidates and trigger AI feedback emails
+- Open **Admin** for full candidate list, sent emails, and tickets
 
 Health check: **http://localhost:5000/health**.
 
@@ -131,15 +131,15 @@ Runs the Flask app and Qdrant in separate containers:
 docker-compose up -d
 ```
 
-- App: **http://localhost:5000**  
+- App: **http://localhost:5000**
 - Qdrant: **http://localhost:6333** (API), **6334** (gRPC)
 
 Volumes:
 
-- `./data` – app data  
-- `./uploads` – uploaded CVs  
-- `./qdrant_db` – local Qdrant data (if not using Qdrant container only for API)  
-- `qdrant_storage` – named volume for Qdrant persistence  
+- `./data` – app data
+- `./uploads` – uploaded CVs
+- `./qdrant_db` – local Qdrant data (if not using Qdrant container only for API)
+- `qdrant_storage` – named volume for Qdrant persistence
 
 Set all required env vars in `.env` (see **Environment variables** above). For Docker, `QDRANT_HOST=qdrant` and `QDRANT_PORT=6333` are passed by default so the app talks to the Qdrant container.
 
@@ -188,9 +188,23 @@ BOOK/
 ├── utils/
 ├── Dockerfile
 ├── docker-compose.yml
+├── .pre-commit-config.yaml
 ├── requirements.txt
 └── .env.example
 ```
+
+---
+
+## Pre-commit (optional)
+
+To run Black, Ruff, and general hooks before each commit:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+After that, `git commit` will run the hooks. To run them manually: `pre-commit run --all-files`.
 
 ---
 

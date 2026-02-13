@@ -32,3 +32,6 @@ pyyaml>=6.0  # Dla konfiguracji YAML
 # Markdown to DOCX conversion (opcjonalne)
 markdown>=3.4.0
 python-docx>=0.8.11
+
+# Dev / pre-commit (optional: pip install pre-commit && pre-commit install)
+pre-commit>=3.6.0

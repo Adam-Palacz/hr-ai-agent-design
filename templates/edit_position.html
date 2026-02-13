@@ -95,10 +95,10 @@
 <body>
     <div class="container">
         <a href="{{ url_for('positions_list') }}" class="btn-back">← Powrót do listy pozycji</a>
-        
+
         <h1>✏️ Edytuj Pozycję</h1>
         <p class="subtitle">Zaktualizuj informacje o pozycji</p>
-        
+
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -106,27 +106,25 @@
                 {% endfor %}
             {% endif %}
         {% endwith %}
-        
+
         <form action="{{ url_for('edit_position', position_id=position.id) }}" method="post">
             <div class="form-group">
                 <label for="title">Tytuł stanowiska <span class="required">*</span></label>
                 <input type="text" name="title" id="title" value="{{ position.title }}" required>
             </div>
-            
+
             <div class="form-group">
                 <label for="company">Firma <span class="required">*</span></label>
                 <input type="text" name="company" id="company" value="{{ position.company }}" required>
             </div>
-            
+
             <div class="form-group">
                 <label for="description">Opis stanowiska</label>
                 <textarea name="description" id="description">{{ position.description or '' }}</textarea>
             </div>
-            
+
             <button type="submit" class="btn-submit">Zaktualizuj Pozycję</button>
         </form>
     </div>
 </body>
 </html>
-
-

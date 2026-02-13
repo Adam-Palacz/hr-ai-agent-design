@@ -136,7 +136,7 @@
                 </div>
                 <div class="form-group">
                     <label for="deadline">Deadline (opcjonalnie)</label>
-                    <input type="datetime-local" name="deadline" id="deadline" 
+                    <input type="datetime-local" name="deadline" id="deadline"
                            value="{% if ticket.deadline %}{{ ticket.deadline.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
                 </div>
                 <div class="btn-group">
@@ -148,4 +148,3 @@
     </div>
 </body>
 </html>
-

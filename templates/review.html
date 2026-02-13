@@ -136,27 +136,27 @@
             <h2>📄 Podgląd CV</h2>
             <iframe src="{{ url_for('uploaded_file', filename=filename) }}" class="pdf-viewer" type="application/pdf"></iframe>
         </div>
-        
+
         <div class="panel">
             <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
                 <a href="{{ url_for('index') }}" style="color: #667eea; text-decoration: none;">← Powrót do listy</a>
                 <a href="{{ url_for('edit_candidate', candidate_id=candidate.id) }}" style="padding: 8px 16px; background: #667eea; color: white; text-decoration: none; border-radius: 4px; font-size: 14px;">✏️ Edytuj</a>
             </div>
-            
+
             <h2>📝 Formularz oceny</h2>
-            
+
             {% if candidate %}
             <div class="cv-info-box" style="background: #f0f7ff; border-left: 4px solid #667eea; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
                 <h3 style="margin-bottom: 10px; color: #333;">📋 Informacje o kandydacie:</h3>
                 <p><strong>Imię i nazwisko:</strong> {{ candidate.full_name }}</p>
                 <p><strong>Email:</strong> {{ candidate.email }}</p>
-                <p><strong>Status:</strong> 
+                <p><strong>Status:</strong>
                     {% if candidate.status.value == 'in_progress' %}W trakcie
                     {% elif candidate.status.value == 'accepted' %}Zaakceptowany
                     {% elif candidate.status.value == 'rejected' %}Odrzucony
                     {% endif %}
                 </p>
-                <p><strong>Etap:</strong> 
+                <p><strong>Etap:</strong>
                     {% if candidate.stage.value == 'initial_screening' %}Pierwsza selekcja
                     {% elif candidate.stage.value == 'hr_interview' %}Rozmowa z HR
                     {% elif candidate.stage.value == 'technical_assessment' %}Weryfikacja wiedzy
@@ -167,7 +167,7 @@
                 </p>
             </div>
             {% endif %}
-            
+
             {% if hr_notes %}
             <div style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
                 <h3 style="margin-bottom: 15px; color: #333;">📝 Historia notatek HR ({{ hr_notes|length }})</h3>
@@ -179,7 +179,7 @@
                     <div style="display: flex; justify-content: space-between; margin-bottom: 8px; align-items: center;">
                         <div>
                             <strong style="color: #1976d2; display: block; margin-bottom: 4px;">
-                                📌 Etap: 
+                                📌 Etap:
                                 {% if note.stage.value == 'initial_screening' %}Pierwsza selekcja
                                 {% elif note.stage.value == 'hr_interview' %}Rozmowa HR
                                 {% elif note.stage.value == 'technical_assessment' %}Weryfikacja wiedzy
@@ -202,7 +202,7 @@
                 <p style="color: #856404; margin: 0;">ℹ️ Brak notatek HR dla tego kandydata. Notatka zostanie automatycznie dodana do bazy danych po wygenerowaniu feedbacku.</p>
             </div>
             {% endif %}
-            
+
             {% if feedback_emails %}
             <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
                 <h3 style="margin-bottom: 10px; color: #333;">📧 Wysłane emaile z feedbackiem:</h3>
@@ -213,7 +213,7 @@
                 {% endfor %}
             </div>
             {% endif %}
-            
+
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}
@@ -221,11 +221,11 @@
                     {% endfor %}
                 {% endif %}
             {% endwith %}
-            
+
             <form action="/process" method="post" id="reviewForm">
                 {% if candidate %}<input type="hidden" name="candidate_id" value="{{ candidate.id }}">{% endif %}
                 <input type="hidden" name="filename" value="{{ filename }}">
-                
+
                 {% if candidate %}
                 <div class="form-group" style="background: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
                     <label style="display: block; margin-bottom: 10px; color: #333; font-weight: 600;">📊 Etap rekrutacji:</label>
@@ -240,7 +240,7 @@
                     <input type="hidden" name="stage" value="{{ candidate.stage.value }}">
                 </div>
                 {% endif %}
-                
+
                 <div class="form-group">
                     <label>Decyzja <span class="required">*</span></label>
                     <div class="decision-buttons">
@@ -249,7 +249,7 @@
                     </div>
                     <input type="hidden" name="decision" id="decision" value="" required>
                 </div>
-                
+
                 {% if job_offer %}
                 <div class="form-group" style="background: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
                     <label style="display: block; margin-bottom: 10px; color: #333; font-weight: 600;">📋 Informacje o stanowisku:</label>
@@ -269,38 +269,38 @@
                     {% endif %}
                 </div>
                 {% endif %}
-                
+
                 <div class="form-group">
                     <label for="notes">Notatki HR <span class="required">*</span></label>
                     <textarea name="notes" id="notes" required placeholder="Wpisz ocenę kandydata dla aktualnego etapu. Notatka zostanie automatycznie zapisana do bazy danych z informacją o etapie rekrutacji."></textarea>
                     <small>
-                        <strong>ℹ️ Ważne:</strong> Notatka zostanie automatycznie zapisana do bazy danych z informacją o wybranym etapie rekrutacji. 
-                        Przy kolejnych etapach będziesz widzieć wszystkie poprzednie notatki. 
+                        <strong>ℹ️ Ważne:</strong> Notatka zostanie automatycznie zapisana do bazy danych z informacją o wybranym etapie rekrutacji.
+                        Przy kolejnych etapach będziesz widzieć wszystkie poprzednie notatki.
                         AI użyje wszystkich notatek (w tym tej) do wygenerowania feedbacku.
                     </small>
                 </div>
-                
+
                 <div class="form-group">
                     <label for="candidate_email">Email kandydata (wymagany przy odrzuceniu)</label>
                     <input type="email" name="candidate_email" id="candidate_email" value="{% if candidate %}{{ candidate.email }}{% endif %}" placeholder="kandydat@example.com">
                     <small>Email zostanie wysłany automatycznie przy odrzuceniu</small>
                 </div>
-                
+
                 <button type="submit" class="btn-submit" id="submitBtn">Przetwórz i wygeneruj feedback</button>
             </form>
         </div>
     </div>
-    
+
     <script>
         const decisionButtons = document.querySelectorAll('.decision-btn');
         const decisionInput = document.getElementById('decision');
         const candidateEmail = document.getElementById('candidate_email');
         const reviewForm = document.getElementById('reviewForm');
-        
+
         // Initialize decision button state - always start with no selection
         // This ensures buttons are unselected when candidate moves to next stage
         decisionInput.value = '';
-        
+
         // Update submit button text based on decision
         const submitBtn = document.getElementById('submitBtn');
         function updateSubmitButton() {
@@ -315,49 +315,49 @@
                 submitBtn.style.background = '#667eea';
             }
         }
-        
+
         // Update button on page load
         updateSubmitButton();
-        
+
         decisionButtons.forEach(btn => {
             btn.addEventListener('click', function() {
                 decisionButtons.forEach(b => b.classList.remove('active'));
                 this.classList.add('active');
                 decisionInput.value = this.dataset.value;
-                
+
                 // Make email required if rejected
                 if (this.dataset.value === 'rejected') {
                     candidateEmail.required = true;
                 } else {
                     candidateEmail.required = false;
                 }
-                
+
                 // Update submit button text
                 updateSubmitButton();
             });
         });
-        
+
         let isSubmitting = false;
-        
+
         reviewForm.addEventListener('submit', function(e) {
             // Prevent double submission
             if (isSubmitting) {
                 e.preventDefault();
                 return false;
             }
-            
+
             if (!decisionInput.value) {
                 e.preventDefault();
                 alert('Wybierz decyzję (Zaakceptuj lub Odrzuć)');
                 return false;
             }
-            
+
             if (decisionInput.value === 'rejected' && !candidateEmail.value.trim()) {
                 e.preventDefault();
                 alert('Email kandydata jest wymagany przy odrzuceniu');
                 return false;
             }
-            
+
             // Mark as submitting and disable button
             isSubmitting = true;
             submitBtn.disabled = true;
@@ -368,4 +368,3 @@
     </script>
 </body>
 </html>
-

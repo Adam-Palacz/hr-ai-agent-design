@@ -1,4 +1,5 @@
 """Email monitoring service that runs in background thread."""
+
 import time
 import threading
 from typing import Optional
@@ -12,7 +13,7 @@ from agents.email_classifier_agent import EmailClassifierAgent
 
 class EmailMonitor:
     """Background service for monitoring and processing incoming emails."""
-    
+
     def __init__(
         self,
         email_username: str,
@@ -24,11 +25,11 @@ class EmailMonitor:
         smtp_use_tls: bool = True,
         iod_email: str = None,
         hr_email: str = None,
-        check_interval: int = 60
+        check_interval: int = 60,
     ):
         """
         Initialize email monitor.
-        
+
         Args:
             email_username: Email username
             email_password: Email password or app password
@@ -46,68 +47,74 @@ class EmailMonitor:
         self.iod_email = iod_email
         self.hr_email = hr_email
         self.check_interval = check_interval
-        
+
         self.listener = EmailListener(email_username, email_password, imap_host, imap_port)
-        self.router = EmailRouter(email_username, email_password, smtp_host, smtp_port, smtp_use_tls, iod_email, hr_email)
-        
+        self.router = EmailRouter(
+            email_username, email_password, smtp_host, smtp_port, smtp_use_tls, iod_email, hr_email
+        )
+
         # Track last processed message sequence number within this process.
         # This way we react to all NEW messages (ALL),
         # regardless of whether they were already marked as read.
         self.last_msg_num: Optional[int] = None
-        
+
         # Initialize AI classifier
         try:
             from config import settings
+
             self.classifier = EmailClassifierAgent(
-                model_name=settings.openai_model,
-                api_key=settings.api_key
+                model_name=settings.openai_model, api_key=settings.api_key
             )
             logger.info(f"AI email classifier initialized with model: {settings.openai_model}")
         except Exception as e:
-            logger.warning(f"Failed to initialize AI classifier: {str(e)}. Will use keyword-based classification.")
+            logger.warning(
+                f"Failed to initialize AI classifier: {str(e)}. Will use keyword-based classification."
+            )
             self.classifier = None
-        
+
         self.running = False
         self.thread: Optional[threading.Thread] = None
-    
+
     def start(self):
         """Start email monitoring in background thread."""
         if self.running:
             logger.warning("Email monitor is already running")
             return
-        
+
         if not self.email_username or not self.email_password:
             logger.warning("Email credentials not configured. Email monitoring disabled.")
             return
-        
+
         if not self.iod_email or not self.hr_email:
             logger.warning("IOD or HR email not configured. Email monitoring disabled.")
             return
-        
+
         self.running = True
         self.thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self.thread.start()
         logger.info("Email monitor started")
-    
+
     def stop(self):
         """Stop email monitoring."""
         self.running = False
         if self.listener:
             self.listener.disconnect()
         logger.info("Email monitor stopped")
-    
+
     def _monitor_loop(self):
         """Main monitoring loop."""
         logger.info(f"Email monitor loop started (check interval: {self.check_interval}s)")
-        
+
         while self.running:
             try:
                 # Connect to email server
                 if not self.listener.connect():
-                    logger.debug(f"Failed to connect to email server. Retrying in {self.check_interval}s.")
+                    logger.debug(
+                        f"Failed to connect to email server. Retrying in {self.check_interval}s."
+                    )
                     time.sleep(self.check_interval)
                     continue
-                
+
                 # Select INBOX
                 status, _ = self.listener.mail.select("INBOX")
                 if status != "OK":
@@ -119,7 +126,9 @@ class EmailMonitor:
                 # Get ALL message sequence numbers
                 status, data = self.listener.mail.search(None, "ALL")
                 if status != "OK":
-                    logger.warning(f"Failed to search ALL messages in INBOX (status={status}, data={data})")
+                    logger.warning(
+                        f"Failed to search ALL messages in INBOX (status={status}, data={data})"
+                    )
                     self.listener.disconnect()
                     time.sleep(self.check_interval)
                     continue
@@ -148,13 +157,17 @@ class EmailMonitor:
                     if new_msg_nums:
                         # Track successfully processed message numbers
                         successfully_processed = []
-                        
+
                         for msg_num in new_msg_nums:
                             try:
                                 # Fetch full message by sequence number
-                                status, msg_data = self.listener.mail.fetch(str(msg_num), "(RFC822)")
+                                status, msg_data = self.listener.mail.fetch(
+                                    str(msg_num), "(RFC822)"
+                                )
                                 if status != "OK" or not msg_data or msg_data[0] is None:
-                                    logger.warning(f"Failed to fetch email seq={msg_num} (status={status})")
+                                    logger.warning(
+                                        f"Failed to fetch email seq={msg_num} (status={status})"
+                                    )
                                     continue
 
                                 email_body = msg_data[0][1]
@@ -191,24 +204,27 @@ class EmailMonitor:
                                     # Don't add to successfully_processed - will retry next cycle
 
                             except Exception as e:
-                                logger.error(f"Error processing email seq={msg_num}: {str(e)}", exc_info=True)
+                                logger.error(
+                                    f"Error processing email seq={msg_num}: {str(e)}", exc_info=True
+                                )
                                 # Don't add to successfully_processed - will retry next cycle
 
                         # Update last_msg_num only to the highest successfully processed message
                         # This ensures we don't skip messages that failed to process
                         if successfully_processed:
                             self.last_msg_num = max(successfully_processed)
-                            logger.debug(f"Updated last_msg_num to {self.last_msg_num} ({len(successfully_processed)} messages processed)")
+                            logger.debug(
+                                f"Updated last_msg_num to {self.last_msg_num} ({len(successfully_processed)} messages processed)"
+                            )
                         # If no messages were successfully processed, keep current last_msg_num
                         # This allows retry of failed messages in next cycle
-                
+
                 # Disconnect
                 self.listener.disconnect()
-                
+
                 # Wait before next check
                 time.sleep(self.check_interval)
-                
+
             except Exception as e:
                 logger.error(f"Error in email monitor loop: {str(e)}", exc_info=True)
                 time.sleep(self.check_interval)
-
