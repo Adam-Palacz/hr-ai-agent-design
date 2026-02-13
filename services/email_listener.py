@@ -63,9 +63,9 @@ class EmailListener:
                 logger.error("Email credentials not provided to EmailListener")
                 return False
             
-            # Utwórz połączenie IMAP z timeoutem
+            # Create IMAP connection with timeout
             import socket
-            socket.setdefaulttimeout(30)  # 30 sekund timeout
+            socket.setdefaulttimeout(30)  # 30 second timeout
             
             self.mail = imaplib.IMAP4_SSL(self.imap_server, self.imap_port, timeout=30)
             self.mail.login(self.email_username, self.email_password)

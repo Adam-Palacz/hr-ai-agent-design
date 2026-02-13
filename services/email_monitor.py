@@ -51,8 +51,8 @@ class EmailMonitor:
         self.router = EmailRouter(email_username, email_password, smtp_host, smtp_port, smtp_use_tls, iod_email, hr_email)
         
         # Track last processed message sequence number within this process.
-        # Dzięki temu reagujemy na wszystkie NOWE wiadomości (ALL),
-        # niezależnie od tego, czy zostały już oznaczone jako przeczytane.
+        # This way we react to all NEW messages (ALL),
+        # regardless of whether they were already marked as read.
         self.last_msg_num: Optional[int] = None
         
         # Initialize AI classifier
@@ -137,12 +137,12 @@ class EmailMonitor:
                     time.sleep(self.check_interval)
                     continue
 
-                # On first run: ustawiamy last_msg_num na najnowszą wiadomość,
-                # żeby nie przetwarzać całej historii.
+                # On first run: set last_msg_num to the latest message,
+                # so we don't process the entire history.
                 if self.last_msg_num is None:
                     self.last_msg_num = max(all_msg_nums)
                 else:
-                    # Nowe wiadomości mają numer większy niż last_msg_num
+                    # New messages have a number greater than last_msg_num
                     new_msg_nums = [n for n in all_msg_nums if n > self.last_msg_num]
 
                     if new_msg_nums:

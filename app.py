@@ -1101,7 +1101,7 @@ def db_export():
 def health():
     """Health check endpoint for Docker/Kubernetes."""
     try:
-        # Sprawdź czy baza danych działa
+        # Check if database is working
         from database.models import get_db
         db = get_db()
         db.execute('SELECT 1').fetchone()

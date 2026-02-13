@@ -18,10 +18,10 @@ class CandidateStatus(str, Enum):
 
 class RecruitmentStage(str, Enum):
     """Recruitment process stages."""
-    INITIAL_SCREENING = "initial_screening"  # Pierwsza selekcja
-    HR_INTERVIEW = "hr_interview"  # Rozmowa z HR
-    TECHNICAL_ASSESSMENT = "technical_assessment"  # Weryfikacja wiedzy
-    FINAL_INTERVIEW = "final_interview"  # Rozmowa końcowa
+    INITIAL_SCREENING = "initial_screening"  # Initial screening
+    HR_INTERVIEW = "hr_interview"  # HR interview
+    TECHNICAL_ASSESSMENT = "technical_assessment"  # Knowledge verification
+    FINAL_INTERVIEW = "final_interview"  # Final interview
     OFFER = "offer"  # Oferta
 
 
@@ -347,7 +347,7 @@ def init_db():
         # Column already exists, ignore
         pass
 
-    # Normalize existing data: no "unknown" state in UI -> treat NULL as "Nie" (0)
+    # Normalize existing data: no "unknown" state in UI -> treat NULL as No (0)
     try:
         cursor.execute('UPDATE candidates SET consent_for_other_positions = 0 WHERE consent_for_other_positions IS NULL')
     except sqlite3.OperationalError:

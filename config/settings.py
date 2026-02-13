@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     azure_openai_gpt_deployment: str = "gpt-4.1"
     azure_openai_vision_deployment: str = "gpt-5-nano"
 
-    # Alias na „bieżący model tekstowy” – zawsze wskazuje na deployment w Azure
-    # Ustawiany w model_post_init na azure_openai_gpt_deployment
+    # Alias for the current text model „bieżący model tekstowy” – always points to Azure deployment
+    # Set in model_post_init to azure_openai_gpt_deployment
     openai_model: str = "gpt-5-nano"
     openai_vision_model: str = "gpt-5-nano"
 

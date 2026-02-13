@@ -303,15 +303,15 @@ Dział HR
                 logger.warning("Cannot handle consent - no email address")
                 return False
 
-            # 1) Spróbuj powiązać kandydata po Message-ID (odpowiedź na nasz feedback)
+            # 1) Try to link candidate by Message-ID (reply to our feedback)
             candidate = None
             in_reply_to = email_data.get('in_reply_to') or email_data.get('message_id')
             feedback_email = None
 
             if in_reply_to:
-                # Normalizuj Message-ID (zostaw tak, jak zapisaliśmy w bazie, zwykle z <>)
+                # Normalize Message-ID (keep as stored in DB, usually with <>)
                 possible_ids = {in_reply_to.strip()}
-                # Czasem klient usuwa nawiasy <> – spróbuj też bez nich
+                # Sometimes the client strips angle brackets – try without them too
                 if in_reply_to.startswith("<") and in_reply_to.endswith(">"):
                     possible_ids.add(in_reply_to[1:-1].strip())
 
@@ -324,7 +324,7 @@ Dział HR
                         logger.warning(f"Error looking up feedback_email by Message-ID={mid}: {e}")
 
             if feedback_email:
-                # Mamy powiązany feedback → znajdź kandydata po candidate_id
+                # We have linked feedback → find candidate by candidate_id
                 try:
                     candidate = get_candidate_by_id(feedback_email.candidate_id)
                     if candidate:
@@ -335,7 +335,7 @@ Dział HR
                 except Exception as e:
                     logger.warning(f"Error loading candidate by id {feedback_email.candidate_id}: {e}")
 
-            # 2) Jeśli nie udało się po Message-ID, spróbuj po adresie email
+            # 2) If Message-ID lookup failed, try by email address
             if not candidate:
                 candidate = get_candidate_by_email(from_email)
 
@@ -391,7 +391,7 @@ Dział HR
                 body=ack_body
             )
 
-            # Inform HR o zmianie zgody (pełniejszy obraz sytuacji)
+            # Notify HR about consent change (fuller picture of the situation)
             try:
                 hr_subject = f"[HR] Zmiana zgody kandydata na inne rekrutacje – {candidate.first_name} {candidate.last_name}"
                 hr_body = f"""
@@ -509,16 +509,16 @@ Temat: {email_data.get('subject', 'Brak tematu')}
             
             logger.info(f"Query classified as: {action} (confidence: {confidence:.2f}, reasoning: {reasoning})")
             
-            # KRYTYCZNA WALIDACJA: Różne progi dla różnych akcji
-            # Dla rag_answer: pozwalamy spróbować nawet przy niższej confidence (0.5+), bo RAG może znaleźć odpowiedź
-            # Dla direct_answer: wymagamy wyższej confidence (0.85+)
-            # Dla forward_to_hr lub confidence < 0.5: zawsze przekazujemy do HR
+            # CRITICAL VALIDATION: Different thresholds for different actions
+            # For rag_answer: allow trying even with lower confidence (0.5+), as RAG may find the answer
+            # For direct_answer: require higher confidence (0.85+)
+            # For forward_to_hr or confidence < 0.5: always forward to HR
             if action == 'rag_answer' and confidence < 0.5:
                 logger.warning(f"Confidence ({confidence:.2f}) < 0.50 for rag_answer, forwarding to HR instead")
                 action = 'forward_to_hr'
                 reasoning = f"Poziom pewności ({confidence:.2f}) jest zbyt niski dla rag_answer. {reasoning}"
             elif action != 'rag_answer' and confidence < 0.7:
-                # Dla direct_answer i forward_to_hr: próg 0.7
+                # For direct_answer and forward_to_hr: threshold 0.7
                 if action == 'direct_answer':
                     logger.warning(f"Confidence ({confidence:.2f}) < 0.70 for direct_answer, forwarding to HR instead")
                 action = 'forward_to_hr'
@@ -532,7 +532,7 @@ Temat: {email_data.get('subject', 'Brak tematu')}
             
             elif action == 'direct_answer':
                 # Generate response from basic knowledge
-                # DODATKOWA WALIDACJA: Sprawdź confidence jeszcze raz przed odpowiedzią
+                # ADDITIONAL VALIDATION: Check confidence again before responding
                 if confidence < 0.85:
                     logger.warning(f"Confidence ({confidence:.2f}) < 0.85 for direct_answer, forwarding to HR")
                     return self._route_to_hr(email_data)
@@ -542,7 +542,7 @@ Temat: {email_data.get('subject', 'Brak tematu')}
                     email_subject, email_body, from_email, rag_context=None
                 )
                 
-                # WALIDACJA: Jeśli agent zwrócił None, oznacza to że nie jest pewien - przekaż do HR
+                # VALIDATION: If agent returned None, it is not confident – forward to HR
                 if response is None:
                     logger.warning("Agent returned None (not confident enough), forwarding to HR")
                     return self._route_to_hr(email_data)
@@ -563,8 +563,8 @@ Temat: {email_data.get('subject', 'Brak tematu')}
                 return success
             
             elif action == 'rag_answer':
-                # Dla rag_answer: pozwalamy spróbować jeśli confidence >= 0.5 (już zwalidowane wcześniej)
-                # RAG może znaleźć odpowiedź nawet jeśli klasyfikacja była niepewna
+                # For rag_answer: allow trying if confidence >= 0.5 (already validated earlier)
+                # RAG may find the answer even if classification was uncertain
                 logger.info(f"Generating answer using RAG (confidence = {confidence:.2f})")
                 rag_db = self._get_rag_db()
                 
@@ -578,7 +578,7 @@ Temat: {email_data.get('subject', 'Brak tematu')}
                 
                 logger.info(f"Found {len(rag_results)} relevant documents from RAG")
                 
-                # WALIDACJA: Sprawdź czy RAG znalazł relevantne dokumenty
+                # VALIDATION: Check whether RAG found relevant documents
                 if not rag_results or len(rag_results) == 0:
                     logger.warning("No relevant documents found in RAG, forwarding to HR")
                     return self._route_to_hr(email_data)
@@ -588,12 +588,12 @@ Temat: {email_data.get('subject', 'Brak tematu')}
                     email_subject, email_body, from_email, rag_context=rag_results
                 )
                 
-                # WALIDACJA: Jeśli agent zwrócił None, oznacza to że nie jest pewien - przekaż do HR
+                # VALIDATION: If agent returned None, it is not confident – forward to HR
                 if response is None:
                     logger.warning("Agent returned None (not confident enough), forwarding to HR")
                     return self._route_to_hr(email_data)
                 
-                # WALIDACJA: Sprawdź jakość odpowiedzi z RAG przed wysłaniem
+                # VALIDATION: Check quality of RAG response before sending
                 if self.rag_validator:
                     logger.info("Validating RAG-generated response before sending")
                     validation_result = self.rag_validator.validate_rag_response(
@@ -874,7 +874,7 @@ Return JSON in format:
             
             subject = f"[HR] {email_subject}"
             
-            # Sprawdź czy kandydat istnieje w bazie danych (dla informacji w emailu)
+            # Check if candidate exists in the database (for email content)
             candidate_info = ""
             if candidate:
                 try:
