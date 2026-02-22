@@ -20,7 +20,7 @@ class QueryClassifierAgent(BaseAgent):
     def __init__(self, model_name: str = None, temperature: float = 0.3):
         from config import settings
 
-        model_name = model_name or settings.openai_model
+        model_name = model_name or settings.azure_openai_gpt_deployment
         super().__init__(model_name=model_name, temperature=temperature)
 
         # Basic knowledge for the agent (can answer without RAG)

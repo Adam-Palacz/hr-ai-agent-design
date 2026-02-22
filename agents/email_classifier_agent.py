@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from core.logger import logger
 from agents.base_agent import BaseAgent
 from utils.json_parser import parse_json_safe
+from config import settings
 
 
 class EmailClassification(BaseModel):
@@ -43,7 +44,7 @@ class EmailClassifierAgent(BaseAgent):
 
     def __init__(
         self,
-        model_name: str = "gpt-3.5-turbo",
+        model_name: str = settings.azure_openai_gpt_deployment,
         temperature: float = 0.1,  # Low temperature for consistent classification
         api_key: Optional[str] = None,
         timeout: int = 30,

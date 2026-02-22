@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     azure_openai_endpoint: str = "https://openai-agentai-pl.openai.azure.com/"
     azure_openai_api_version: str = "2024-12-01-preview"
     # IMPORTANT: these names MUST match deployment names in Azure
-    azure_openai_gpt_deployment: str = "gpt-4.1"
+    azure_openai_gpt_deployment: str = "gpt-5-mini"
     azure_openai_vision_deployment: str = "gpt-5-nano"
 
     # Alias for the current text model „bieżący model tekstowy” – always points to Azure deployment

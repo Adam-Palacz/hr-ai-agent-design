@@ -77,9 +77,15 @@ class EmailRouter:
 
         # Initialize AI agents for query handling
         try:
-            self.query_classifier = QueryClassifierAgent(model_name=settings.openai_model)
-            self.query_responder = QueryResponderAgent(model_name=settings.openai_model)
-            self.rag_validator = RAGResponseValidatorAgent(model_name=settings.openai_model)
+            self.query_classifier = QueryClassifierAgent(
+                model_name=settings.azure_openai_gpt_deployment
+            )
+            self.query_responder = QueryResponderAgent(
+                model_name=settings.azure_openai_gpt_deployment
+            )
+            self.rag_validator = RAGResponseValidatorAgent(
+                model_name=settings.azure_openai_gpt_deployment
+            )
             # Initialize RAG (will be lazy-loaded when needed)
             self.rag_db = None
             logger.info("Query classification agents initialized")
@@ -376,7 +382,7 @@ Zarejestrowaliśmy Twoją zgodę na rozważenie Twojej kandydatury w kontekście
 
 Jeśli znajdziemy odpowiednią dla Ciebie ofertę, skontaktujemy się z Tobą niezwłocznie.
 
-Jeśli chciałbyś zmienić zdanie, prosimy o poinformowanie nas o tym, odpowiadając na tego maila.
+W razie chęci zmiany decyzji prosimy o poinformowanie nas, odpowiadając na tę wiadomość.
 
 Z wyrazami szacunku
 
@@ -388,7 +394,7 @@ Dziękujemy za kontakt.
 
 Zarejestrowaliśmy informację, że nie wyrażasz zgody na rozważenie Twojej kandydatury w kontekście innych stanowisk.
 
-Jeśli chciałbyś zmienić zdanie, prosimy o poinformowanie nas o tym, odpowiadając na tego maila.
+W razie chęci zmiany decyzji prosimy o poinformowanie nas, odpowiadając na tę wiadomość.
 
 Z wyrazami szacunku
 
@@ -405,7 +411,7 @@ Kandydat: {candidate.first_name} {candidate.last_name}
 Email: {candidate.email}
 ID kandydata w systemie: {candidate.id}
 
-Nowa wartość zgody na inne stanowiska: {"TAK" if consent_value else "NIE"}
+Nowa wartość zgody na inne rekrutacje: {"TAK" if consent_value else "NIE"}
 
 Oryginalna wiadomość kandydata:
 --------------------------------
@@ -679,7 +685,7 @@ Automatyczna odpowiedź została wygenerowana i wysłana do kandydata.
 
 TYP ODPOWIEDZI: {response_type.upper()}
 Kandydat: {email_data.get('from_email', 'Nieznany')}
-Temat oryginalnego emaila: {email_data.get('subject', 'Brak tematu')}
+Temat oryginalnej wiadomości: {email_data.get('subject', 'Brak tematu')}
 
 ---
 ORYGINALNA WIADOMOŚĆ KANDYDATA:
@@ -834,7 +840,7 @@ Return JSON in format:
                 return True  # Return True to avoid reprocessing
 
             # Mark as processed
-            self.processed_emails.add(hr_forward_id)
+            self.processed_emails[hr_forward_id] = None
             logger.debug(f"Marking HR forward {hr_forward_id} as processed")
 
             # Try to find related candidate (get the latest one if multiple exist)
@@ -963,14 +969,14 @@ Return JSON in format:
 
                     candidate_info = f"""
 ---
-INFORMACJE O KANDYDACIE (znaleziony w bazie danych):
+INFORMACJE O KANDYDACIE (dane z bazy):
 ---
 ID kandydata: {candidate.id}
 Imię i nazwisko: {candidate.full_name}
 Email: {candidate.email}
 Status: {status_display}
 Etap rekrutacji: {stage_display}{position_info}{consent_info}
-Link do profilu: http://localhost:5000/candidate/{candidate.id} (lub odpowiedni URL w produkcji)
+Link do profilu: http://localhost:5000/candidate/{candidate.id} (w środowisku produkcyjnym należy podać właściwy adres URL)
 ---
 """
                     logger.info(

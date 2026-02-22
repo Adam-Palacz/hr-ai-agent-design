@@ -1,8 +1,8 @@
-# Multi-stage build dla optymalizacji rozmiaru
+# Multi-stage build for smaller image size
 FROM python:3.11-slim as builder
 
-# Instalacja zależności systemowych do budowania
-# Retry logic dla problemów z siecią (czasami repozytoria Debian są niedostępne)
+# Install system dependencies for building
+# Retry logic for network issues (Debian repos can be temporarily unavailable)
 RUN set -eux; \
     for i in 1 2 3; do \
         apt-get update && \
@@ -12,16 +12,16 @@ RUN set -eux; \
     done && \
     rm -rf /var/lib/apt/lists/*
 
-# Kopia requirements i instalacja zależności Python (globalnie, nie --user)
+# Copy requirements and install Python dependencies (globally, not --user)
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Finalny obraz
+# Final image
 FROM python:3.11-slim
 
-# Instalacja zależności runtime (dla PDF processing)
-# Retry logic dla problemów z siecią
+# Install runtime dependencies (for PDF processing)
+# Retry logic for network issues
 RUN set -eux; \
     for i in 1 2 3; do \
         apt-get update && \
@@ -31,37 +31,37 @@ RUN set -eux; \
     done && \
     rm -rf /var/lib/apt/lists/*
 
-# Kopia zainstalowanych pakietów z buildera (globalne instalacje)
+# Copy installed packages from builder (global installs)
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Utworzenie użytkownika nie-root
+# Create non-root user
 RUN useradd -m -u 1000 appuser && \
     mkdir -p /app/data /app/uploads /app/qdrant_db && \
     chown -R appuser:appuser /app
 
-# Ustawienie katalogu roboczego
+# Set working directory
 WORKDIR /app
 
-# Kopia kodu aplikacji
+# Copy application code
 COPY --chown=appuser:appuser . .
 
-# Przełączenie na użytkownika nie-root
+# Switch to non-root user
 USER appuser
 
-# Expose port Flask
+# Expose Flask port
 EXPOSE 5000
 
-# Zmienne środowiskowe
+# Environment variables
 ENV PYTHONUNBUFFERED=1 \
     FLASK_APP=app.py \
     FLASK_ENV=production
 
-# Health check (używa curl zamiast requests, żeby uniknąć dodatkowej zależności)
+# Health check (uses urllib instead of requests to avoid extra dependency)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=5)" || exit 1
 
-# Uruchomienie aplikacji
-# Dla MVP: wszystko w jednym kontenerze (web + email monitor w threads)
-# Dla produkcji: użyj Dockerfile.web + Dockerfile.worker z docker-compose.prod.yml
+# Run application
+# For MVP: single container (web + email monitor in threads)
+# For production: use Dockerfile.web + Dockerfile.worker with docker-compose.prod.yml
 CMD ["python", "app.py"]
