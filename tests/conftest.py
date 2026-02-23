@@ -18,15 +18,15 @@ def use_test_database():
     test_db_path = tmp_dir / "data" / "hr_database.db"
     test_db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    import database.models as db_models
+    import database.db as db_module
 
-    original_get_db_path = db_models.get_db_path
-    db_models.get_db_path = lambda: test_db_path
-    db_models.init_db()
+    original_get_db_path = db_module.get_db_path
+    db_module.get_db_path = lambda: test_db_path
+    db_module.init_db()
 
     yield
 
-    db_models.get_db_path = original_get_db_path
+    db_module.get_db_path = original_get_db_path
 
 
 @pytest.fixture(scope="session")
