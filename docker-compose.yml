@@ -5,6 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: recruitment-ai:latest
     container_name: recruitment-ai-app
     ports:
       - "5000:5000"
@@ -13,7 +14,7 @@ services:
       - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-https://openai-agentai-pl.openai.azure.com/}
       - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-12-01-preview}
-      - AZURE_OPENAI_GPT_DEPLOYMENT=${AZURE_OPENAI_GPT_DEPLOYMENT:-gpt-4.1}
+      - AZURE_OPENAI_GPT_DEPLOYMENT=${AZURE_OPENAI_GPT_DEPLOYMENT:-gpt-4.1-nano}
       - AZURE_OPENAI_VISION_DEPLOYMENT=${AZURE_OPENAI_VISION_DEPLOYMENT:-gpt-5-nano}
 
       # Email/SMTP
@@ -55,6 +56,24 @@ services:
     restart: unless-stopped
     networks:
       - recruitment-network
+
+  # Run tests inside the app image (no Qdrant needed; tests use mocks).
+  # Usage: docker-compose run --rm app-test
+  app-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: recruitment-ai:latest
+    environment:
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY:-test-key-no-real-calls}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-https://test.openai.azure.com/}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-12-01-preview}
+      - AZURE_OPENAI_GPT_DEPLOYMENT=${AZURE_OPENAI_GPT_DEPLOYMENT:-gpt-4.1-nano}
+    command: pytest tests/ -v --cov=app --cov=config --cov=agents --cov=services --cov=routes --cov=database --cov-report=term-missing --cov-fail-under=40
+    volumes:
+      - ./data:/app/data
+    profiles:
+      - test
 
   qdrant:
     image: qdrant/qdrant:latest

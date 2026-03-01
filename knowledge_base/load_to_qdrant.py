@@ -5,7 +5,9 @@ Script to load documents from knowledge_base into Qdrant.
 import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
+from typing import Dict, List, Tuple
+
+from dotenv import load_dotenv  # type: ignore[attr-defined]
 
 # Add parent directory to path to import services
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -15,11 +17,13 @@ from services.qdrant_service import QdrantRAG
 load_dotenv()
 
 
-def load_documents_from_files(directory: str = "knowledge_base") -> list:
+def load_documents_from_files(
+    directory: str = "knowledge_base",
+) -> Tuple[List[str], List[Dict[str, str]], List[str]]:
     """Load all .txt files from the directory and return as a list of documents."""
-    documents = []
-    metadatas = []
-    ids = []
+    documents: List[str] = []
+    metadatas: List[Dict[str, str]] = []
+    ids: List[str] = []
 
     knowledge_path = Path(directory)
     if not knowledge_path.exists():

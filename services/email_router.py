@@ -2,7 +2,7 @@
 
 import smtplib
 import os
-from typing import Optional, Dict
+from typing import Any, Dict, Optional
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -30,8 +30,8 @@ class EmailRouter:
         smtp_host: str,
         smtp_port: int,
         smtp_use_tls: bool = True,
-        iod_email: str = None,
-        hr_email: str = None,
+        iod_email: Optional[str] = None,
+        hr_email: Optional[str] = None,
     ):
         """
         Initialize email router.
@@ -58,6 +58,12 @@ class EmailRouter:
         self.max_processed_emails = 1000  # Maximum number of processed emails to track
 
         # Initialize AI client for ticket priority/deadline determination
+        self.ai_client: Any = None
+        self.model_name: Optional[str] = None
+        self.query_classifier: Optional[QueryClassifierAgent] = None
+        self.query_responder: Optional[QueryResponderAgent] = None
+        self.rag_validator: Optional[RAGResponseValidatorAgent] = None
+        self.rag_db: Optional[QdrantRAG] = None
         try:
             from openai import AzureOpenAI
 
@@ -268,8 +274,12 @@ Oryginalny Message-ID: {email_data.get('message_id', 'Brak')}
 In-Reply-To: {email_data.get('in_reply_to', 'Brak')}
 """
 
-            success = self._send_email(
-                to_email=self.iod_email, subject=subject, body=body, reply_to=from_email
+            success = (
+                self._send_email(
+                    to_email=self.iod_email, subject=subject, body=body, reply_to=from_email
+                )
+                if self.iod_email
+                else False
             )
 
             # Send acknowledgment to original sender (always, even if forwarding to IOD failed)
@@ -366,7 +376,8 @@ Dział HR
 
             # Update consent in database
             consent_value = classification == "consent_yes"
-            update_candidate(candidate.id, consent_for_other_positions=consent_value)
+            if candidate.id is not None:
+                update_candidate(candidate.id, consent_for_other_positions=consent_value)
 
             logger.info(
                 f"Updated consent_for_other_positions for candidate {candidate.id} ({from_email}) to {consent_value}"
@@ -419,7 +430,8 @@ Temat: {email_data.get('subject', 'Brak tematu')}
 
 {email_data.get('body', 'Brak treści')}
 """
-                self._send_email(to_email=self.hr_email, subject=hr_subject, body=hr_body)
+                if self.hr_email:
+                    self._send_email(to_email=self.hr_email, subject=hr_subject, body=hr_body)
                 logger.info(f"HR notified about consent change for candidate {candidate.id}")
             except Exception as e:
                 logger.warning(f"Failed to notify HR about consent change: {e}")
@@ -502,6 +514,7 @@ Temat: {email_data.get('subject', 'Brak tematu')}
                 # Fallback: forward to HR if agents not initialized
                 logger.warning("Query agents not initialized, forwarding to HR")
                 return self._route_to_hr(email_data)
+            assert self.query_classifier is not None and self.query_responder is not None
 
             # Step 1: Classify query
             logger.info(f"Classifying query from {from_email}")
@@ -706,7 +719,8 @@ WYGENEROWANA ODPOWIEDŹ:
 
             hr_body += f"\n\n---\nMessage-ID: {email_data.get('message_id', 'Brak')}\n"
 
-            self._send_email(to_email=self.hr_email, subject=hr_subject, body=hr_body)
+            if self.hr_email:
+                self._send_email(to_email=self.hr_email, subject=hr_subject, body=hr_body)
             logger.info(f"HR notified about auto-response ({response_type})")
         except Exception as e:
             logger.warning(f"Failed to notify HR about auto-response: {e}")
@@ -775,7 +789,8 @@ Return JSON in format:
                 response_format={"type": "json_object"},
             )
 
-            result_text = response.choices[0].message.content.strip()
+            content = response.choices[0].message.content
+            result_text = (content or "").strip()
             result = json.loads(result_text)
 
             priority_str = result.get("priority", "MEDIUM").upper()
@@ -1010,8 +1025,12 @@ Oryginalny Message-ID: {email_data.get('message_id', 'Brak')}
 In-Reply-To: {email_data.get('in_reply_to', 'Brak')}
 """
 
-            success = self._send_email(
-                to_email=self.hr_email, subject=subject, body=body, reply_to=from_email
+            success = (
+                self._send_email(
+                    to_email=self.hr_email, subject=subject, body=body, reply_to=from_email
+                )
+                if self.hr_email
+                else False
             )
 
             # Send acknowledgment to original sender (always, even if forwarding to HR failed)

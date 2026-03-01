@@ -105,9 +105,11 @@ Remember: The goal is to ensure candidates receive accurate, helpful, and profes
 
 
 # Simple wrapper class to maintain compatibility with .format() calls
-class RAG_RESPONSE_VALIDATION_PROMPT:
-    def format(self, **kwargs):
+class _RagResponseValidationPromptFormat:
+    def format(self, **kwargs: object) -> str:
         return RAG_RESPONSE_VALIDATION_PROMPT_TEMPLATE.format(**kwargs)
 
 
-RAG_RESPONSE_VALIDATION_PROMPT = RAG_RESPONSE_VALIDATION_PROMPT()
+RAG_RESPONSE_VALIDATION_PROMPT: _RagResponseValidationPromptFormat = (
+    _RagResponseValidationPromptFormat()
+)

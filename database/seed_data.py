@@ -51,7 +51,7 @@ def seed_database(reset: bool = False):
                 )
                 create_position(
                     title=job_offer.title,
-                    company=job_offer.company,
+                    company=job_offer.company or "",
                     description=job_offer.description,
                 )
     except Exception as e:
@@ -211,8 +211,9 @@ Compensation:
     created_positions = []
     for pos_data in positions:
         position = create_position(**pos_data)
-        created_positions.append(position)
-        logger.info(f"Created position: {position.title} at {position.company}")
+        if position is not None:
+            created_positions.append(position)
+            logger.info(f"Created position: {position.title} at {position.company}")
 
     # Create example candidates
     candidates_data = [
@@ -291,8 +292,9 @@ Compensation:
     ]
 
     for cand_data in candidates_data:
-        candidate = create_candidate(**cand_data)
-        logger.info(f"Created candidate: {candidate.full_name}")
+        candidate = create_candidate(**cand_data)  # type: ignore[arg-type]
+        if candidate is not None:
+            logger.info(f"Created candidate: {candidate.full_name}")
 
     logger.info("Database seeding completed!")
 

@@ -117,7 +117,7 @@ class QdrantRAG:
         )
 
         # Return embeddings in order matching input
-        embeddings = [None] * len(texts)
+        embeddings: List[List[float]] = [[] for _ in range(len(texts))]
         for item in response.data:
             embeddings[item.index] = item.embedding
 
@@ -135,7 +135,7 @@ class QdrantRAG:
             ids = [uuid.uuid4() for _ in range(len(documents))]
         else:
             # Convert string IDs to UUID if needed
-            converted_ids = []
+            converted_ids: List[Union[str, int, uuid.UUID]] = []
             for id_val in ids:
                 if isinstance(id_val, str):
                     try:

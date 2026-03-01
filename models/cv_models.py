@@ -24,7 +24,9 @@ class Experience(BaseModel):
     start_date: Optional[str] = Field(None, description="Start date (YYYY-MM or YYYY)")
     end_date: Optional[str] = Field(None, description="End date (YYYY-MM or YYYY) or 'Present'")
     description: Optional[str] = Field(None, description="Job description and responsibilities")
-    achievements: Optional[List[str]] = Field(default_factory=list, description="Key achievements")
+    achievements: Optional[List[str]] = Field(
+        default_factory=lambda: [], description="Key achievements"
+    )
 
 
 class Skill(BaseModel):

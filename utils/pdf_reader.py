@@ -70,21 +70,21 @@ def pdf_to_images(pdf_path: str) -> List[bytes]:
     Returns:
         List of image bytes (one per page)
     """
-    pdf_path = Path(pdf_path)
+    path = Path(pdf_path)
 
-    if not pdf_path.exists():
-        raise FileNotFoundError(f"PDF file not found: {pdf_path}")
+    if not path.exists():
+        raise FileNotFoundError(f"PDF file not found: {path}")
 
     # Try pdf2image first, then PyMuPDF
     if PDF2IMAGE_AVAILABLE:
         try:
-            return _pdf_to_images_pdf2image(str(pdf_path))
+            return _pdf_to_images_pdf2image(str(path))
         except Exception as e:
             if PYMUPDF_AVAILABLE:
-                return _pdf_to_images_pymupdf(str(pdf_path))
+                return _pdf_to_images_pymupdf(str(path))
             raise Exception(f"Failed to convert PDF to images: {str(e)}")
     elif PYMUPDF_AVAILABLE:
-        return _pdf_to_images_pymupdf(str(pdf_path))
+        return _pdf_to_images_pymupdf(str(path))
     else:
         raise ImportError(
             "Neither pdf2image nor PyMuPDF is installed. "
@@ -106,15 +106,15 @@ def extract_text_from_pdf_with_ocr(
     Returns:
         Extracted text content as string
     """
-    pdf_path = Path(pdf_path)
+    path = Path(pdf_path)
 
-    if not pdf_path.exists():
-        raise FileNotFoundError(f"PDF file not found: {pdf_path}")
+    if not path.exists():
+        raise FileNotFoundError(f"PDF file not found: {path}")
 
     # First, try to extract text directly (for text-based PDFs)
     if not use_ocr:
         try:
-            with open(pdf_path, "rb") as file:
+            with open(path, "rb") as file:
                 pdf_reader = PyPDF2.PdfReader(file)
                 text_content = []
 
@@ -139,7 +139,7 @@ def extract_text_from_pdf_with_ocr(
 
     try:
         image_conversion_start = time.time()
-        image_bytes_list = pdf_to_images(str(pdf_path))
+        image_bytes_list = pdf_to_images(str(path))
         image_conversion_time = time.time() - image_conversion_start
         logger.info(
             f"PDF converted to {len(image_bytes_list)} images in {image_conversion_time:.2f}s"
@@ -252,10 +252,10 @@ def extract_text_from_pdf(
         FileNotFoundError: If PDF file doesn't exist
         Exception: If PDF reading fails
     """
-    pdf_path = Path(pdf_path)
+    path = Path(pdf_path)
 
-    if not pdf_path.exists():
-        raise FileNotFoundError(f"PDF file not found: {pdf_path}")
+    if not path.exists():
+        raise FileNotFoundError(f"PDF file not found: {path}")
 
     # First, try to extract text directly (for text-based PDFs)
     # Only use OCR if explicitly requested or if text extraction fails
@@ -267,7 +267,7 @@ def extract_text_from_pdf(
 
     try:
         text_extraction_start = time.time()
-        with open(pdf_path, "rb") as file:
+        with open(path, "rb") as file:
             pdf_reader = PyPDF2.PdfReader(file)
             num_pages = len(pdf_reader.pages)
 
@@ -307,7 +307,7 @@ def extract_text_from_pdf(
                 if verbose:
                     print("  🔍 Too little text, switching to OCR...")
                 return extract_text_from_pdf_with_ocr(
-                    pdf_path, vision_model, use_ocr=True, verbose=verbose
+                    str(path), vision_model, use_ocr=True, verbose=verbose
                 )
 
             if len(extracted_text.strip()) < 50:
@@ -324,7 +324,7 @@ def extract_text_from_pdf(
                 print(f"  ⚠️ Text extraction error: {str(e)}")
                 print("  🔍 Switching to OCR...")
             return extract_text_from_pdf_with_ocr(
-                pdf_path, vision_model, use_ocr=True, verbose=verbose
+                str(path), vision_model, use_ocr=True, verbose=verbose
             )
         logger.error(f"Text extraction failed and OCR not available: {str(e)}")
         raise Exception(f"Error reading PDF file: {str(e)}")

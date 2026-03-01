@@ -66,7 +66,7 @@ Required for AI and basic run:
 |----------|-------------|
 | `AZURE_OPENAI_API_KEY` | Azure OpenAI API key |
 | `AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint URL |
-| `AZURE_OPENAI_GPT_DEPLOYMENT` | GPT model deployment name (e.g. `gpt-4.1`) |
+| `AZURE_OPENAI_GPT_DEPLOYMENT` | GPT model deployment name (e.g. `gpt-4.1-nano`) |
 | `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | Embedding model (e.g. `text-embedding-3-small`) |
 
 Optional – email sending and monitoring:
@@ -204,13 +204,22 @@ pip install -r requirements.txt   # includes pytest, pytest-cov
 pytest
 ```
 
-Run with coverage:
+Run with coverage (minimum 40% line coverage; raise over time):
 
 ```bash
-pytest --cov=app --cov=config --cov=database --cov-report=term-missing
+pytest tests/ --cov=app --cov=config --cov=agents --cov=services --cov=routes --cov=database --cov-report=term-missing --cov-fail-under=40
 ```
 
 Or from project root: `python -m pytest tests/ -v`
+
+- **Integration tests** (feedback pipeline with mocks): run with `pytest -m integration` or as part of default `pytest tests/`.
+- **LLM evaluation tests**: run with `RUN_LLM_EVAL=1 pytest -m evaluation` for optional real-LLM checks (see `tests/test_llm_evaluation.py`).
+
+**Run tests inside Docker** (same image as production, no Qdrant needed):
+
+```bash
+docker-compose --profile test run --rm app-test
+```
 
 ---
 

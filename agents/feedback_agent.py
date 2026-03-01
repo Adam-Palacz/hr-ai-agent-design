@@ -113,6 +113,8 @@ class FeedbackAgent(BaseAgent):
             )
 
             raw_text = response.choices[0].message.content
+            if raw_text is None:
+                raise ValueError("Empty response from model")
 
             # Track model response (with token usage and cost)
             self._save_model_response(

@@ -14,11 +14,14 @@ from models.feedback_models import HRFeedback, CandidateFeedback, FeedbackFormat
 from models.job_models import JobOffer
 from utils.html_formatter import format_feedback_as_html
 
-# Import metrics service
+# Import metrics service (optional)
+metrics_service: Optional[Any] = None
 try:
-    from services.metrics_service import metrics_service
+    from services.metrics_service import metrics_service as _metrics_service
+
+    metrics_service = _metrics_service
 except ImportError:
-    metrics_service = None
+    pass
 
 
 class FeedbackService:
@@ -45,7 +48,7 @@ class FeedbackService:
         self.corrector = correction_agent
         self.max_iterations = max_validation_iterations
         self.validation_failed = False
-        self.validation_error_info = None
+        self.validation_error_info: Optional[Dict[str, Any]] = None
         logger.info("FeedbackService initialized")
 
     def generate_feedback(
@@ -185,6 +188,7 @@ class FeedbackService:
             - is_validated: True if feedback was approved, False if validation failed after max iterations
             - error_info: Dict with error details if validation failed, None otherwise
         """
+        assert self.validator is not None and self.corrector is not None  # caller ensures both set
         current_feedback = feedback
         iteration = 0
         all_validation_results = []
@@ -384,5 +388,8 @@ class FeedbackService:
             HTML formatted string
         """
         return format_feedback_as_html(
-            feedback, consent_for_other_positions=consent_for_other_positions
+            feedback,
+            consent_for_other_positions=(
+                consent_for_other_positions if consent_for_other_positions is not None else False
+            ),
         )

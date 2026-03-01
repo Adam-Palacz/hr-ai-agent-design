@@ -1,6 +1,6 @@
 """Base agent class with common functionality."""
 
-from typing import Optional, Any
+from typing import Any, Callable, Optional
 from openai import AzureOpenAI
 
 from config import settings
@@ -10,10 +10,13 @@ from models.feedback_models import HRFeedback
 from models.job_models import JobOffer
 
 # Import for tracking model responses
+save_model_response: Optional[Callable[..., Any]] = None
 try:
-    from database.models import save_model_response
+    from database.models import save_model_response as _save_model_response  # noqa: F401
+
+    save_model_response = _save_model_response
 except ImportError:
-    save_model_response = None
+    pass
 
 
 class BaseAgent:
@@ -100,6 +103,9 @@ class BaseAgent:
                 selected_pricing = value
                 break
 
+        if selected_pricing is None:
+            selected_pricing = pricing["default"]
+
         # Calculate cost in USD
         input_cost_usd = (input_tokens / 1_000_000) * selected_pricing["input"]
         output_cost_usd = (output_tokens / 1_000_000) * selected_pricing["output"]
@@ -157,14 +163,14 @@ class BaseAgent:
             metadata: Optional metadata dictionary
             response: Optional Azure OpenAI response object (for extracting tokens and costs)
         """
-        if save_model_response:
+        if save_model_response is not None:
             try:
                 # Extract token usage and calculate cost if response is provided
                 enhanced_metadata = metadata.copy() if metadata else {}
 
                 if response:
                     usage_info = self._extract_usage_from_response(response)
-                    if usage_info:
+                    if usage_info is not None:
                         enhanced_metadata.update(
                             {
                                 "input_tokens": usage_info["prompt_tokens"],

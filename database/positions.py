@@ -1,7 +1,7 @@
 """Position CRUD operations."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from database.db import get_db
 from database.schema import Position
@@ -44,7 +44,9 @@ def get_position_by_id(position_id: int) -> Optional[Position]:
     )
 
 
-def create_position(title: str, company: str, description: Optional[str] = None) -> Position:
+def create_position(
+    title: str, company: str, description: Optional[str] = None
+) -> Optional[Position]:
     """Create a new position."""
     conn = get_db()
     cursor = conn.cursor()
@@ -58,6 +60,8 @@ def create_position(title: str, company: str, description: Optional[str] = None)
     position_id = cursor.lastrowid
     conn.commit()
     conn.close()
+    if position_id is None:
+        return None
     return get_position_by_id(position_id)
 
 
@@ -71,7 +75,7 @@ def update_position(
     conn = get_db()
     cursor = conn.cursor()
     updates = []
-    values = []
+    values: List[Any] = []
     if title is not None:
         updates.append("title = ?")
         values.append(title)

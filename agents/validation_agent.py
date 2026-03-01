@@ -5,7 +5,7 @@ from typing import Optional
 from models.cv_models import CVData
 from models.feedback_models import HRFeedback
 from models.job_models import JobOffer
-from models.validation_models import ValidationResult
+from models.validation_models import ValidationResult, ValidationStatus
 from prompts.validation_prompt import VALIDATION_PROMPT
 from core.logger import logger
 from agents.base_agent import BaseAgent
@@ -101,6 +101,8 @@ class FeedbackValidatorAgent(BaseAgent):
             )
 
             raw_text = response.choices[0].message.content
+            if raw_text is None:
+                raise ValueError("Empty response from model")
 
             # Track model response (with token usage and cost)
             metadata = {"temperature": self.temperature}
@@ -132,7 +134,7 @@ class FeedbackValidatorAgent(BaseAgent):
 
             # On validation failure, reject by default for safety
             return ValidationResult(
-                status="rejected",
+                status=ValidationStatus.REJECTED,
                 is_approved=False,
                 reasoning=f"Validation process failed: {str(e)}. Email rejected for safety.",
                 issues_found=["Validation process error"],
@@ -152,7 +154,12 @@ class FeedbackValidatorAgent(BaseAgent):
         data = parse_json_safe(text, fallback_to_extraction=True)
 
         # Map to ValidationResult, with sensible defaults
-        status = data.get("status", "rejected")
+        status_str = data.get("status", "rejected")
+        status = (
+            ValidationStatus(status_str)
+            if status_str in ("approved", "rejected")
+            else ValidationStatus.REJECTED
+        )
         is_approved = bool(data.get("is_approved", False))
         reasoning = data.get("reasoning") or "No reasoning provided."
         issues_found = data.get("issues_found") or []

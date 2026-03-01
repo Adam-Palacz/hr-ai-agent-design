@@ -256,9 +256,9 @@ Remember: Return ACTUAL DATA with real HTML content, not a schema description. T
 
 
 # Simple wrapper class to maintain compatibility with .format() calls
-class FEEDBACK_GENERATION_PROMPT:
-    def format(self, **kwargs):
+class _FeedbackGenerationPromptFormat:
+    def format(self, **kwargs: object) -> str:
         return FEEDBACK_GENERATION_PROMPT_TEMPLATE.format(**kwargs)
 
 
-FEEDBACK_GENERATION_PROMPT = FEEDBACK_GENERATION_PROMPT()
+FEEDBACK_GENERATION_PROMPT: _FeedbackGenerationPromptFormat = _FeedbackGenerationPromptFormat()

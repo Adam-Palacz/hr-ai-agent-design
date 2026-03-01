@@ -142,7 +142,7 @@ class MetricsService:
             )
 
             # Calculate average validation iterations
-            validation_iterations = {}
+            validation_iterations: Dict[int, int] = {}
             for mr in validation_responses:
                 metadata = mr.metadata
                 if metadata:
@@ -151,10 +151,11 @@ class MetricsService:
 
                         if isinstance(metadata, str):
                             metadata = json.loads(metadata)
-                        iteration = metadata.get("validation_number", 1)
-                        validation_iterations[iteration] = (
-                            validation_iterations.get(iteration, 0) + 1
-                        )
+                        if isinstance(metadata, dict):
+                            iteration = metadata.get("validation_number", 1)
+                            validation_iterations[iteration] = (
+                                validation_iterations.get(iteration, 0) + 1
+                            )
                     except Exception:
                         pass
 
@@ -234,7 +235,7 @@ class MetricsService:
             total_input_tokens = 0
             total_output_tokens = 0
             total_tokens = 0
-            cost_by_agent = {}
+            cost_by_agent: Dict[str, Dict[str, Any]] = {}
             token_count = 0
 
             for mr in recent_responses:
@@ -245,41 +246,41 @@ class MetricsService:
 
                         if isinstance(metadata, str):
                             metadata = json.loads(metadata)
+                        if isinstance(metadata, dict):
+                            cost = metadata.get("cost_pln", 0.0)
+                            input_tokens = metadata.get("input_tokens", 0)
+                            output_tokens = metadata.get("output_tokens", 0)
+                            tokens = metadata.get("total_tokens", 0)
 
-                        cost = metadata.get("cost_pln", 0.0)
-                        input_tokens = metadata.get("input_tokens", 0)
-                        output_tokens = metadata.get("output_tokens", 0)
-                        tokens = metadata.get("total_tokens", 0)
+                            if cost > 0:
+                                total_cost += cost
+                                token_count += 1
 
-                        if cost > 0:
-                            total_cost += cost
-                            token_count += 1
+                            if input_tokens > 0:
+                                total_input_tokens += input_tokens
+                            if output_tokens > 0:
+                                total_output_tokens += output_tokens
+                            if tokens > 0:
+                                total_tokens += tokens
 
-                        if input_tokens > 0:
-                            total_input_tokens += input_tokens
-                        if output_tokens > 0:
-                            total_output_tokens += output_tokens
-                        if tokens > 0:
-                            total_tokens += tokens
+                            # Group by agent type
+                            agent_type = mr.agent_type
+                            if agent_type not in cost_by_agent:
+                                cost_by_agent[agent_type] = {
+                                    "cost": 0.0,
+                                    "count": 0,
+                                    "input_tokens": 0,
+                                    "output_tokens": 0,
+                                }
 
-                        # Group by agent type
-                        agent_type = mr.agent_type
-                        if agent_type not in cost_by_agent:
-                            cost_by_agent[agent_type] = {
-                                "cost": 0.0,
-                                "count": 0,
-                                "input_tokens": 0,
-                                "output_tokens": 0,
-                            }
+                            if cost > 0:
+                                cost_by_agent[agent_type]["cost"] += cost
+                                cost_by_agent[agent_type]["count"] += 1
 
-                        if cost > 0:
-                            cost_by_agent[agent_type]["cost"] += cost
-                            cost_by_agent[agent_type]["count"] += 1
-
-                        if input_tokens > 0:
-                            cost_by_agent[agent_type]["input_tokens"] += input_tokens
-                        if output_tokens > 0:
-                            cost_by_agent[agent_type]["output_tokens"] += output_tokens
+                            if input_tokens > 0:
+                                cost_by_agent[agent_type]["input_tokens"] += input_tokens
+                            if output_tokens > 0:
+                                cost_by_agent[agent_type]["output_tokens"] += output_tokens
                     except Exception as e:
                         logger.debug(f"Error parsing metadata for cost metrics: {str(e)}")
                         continue
@@ -303,10 +304,11 @@ class MetricsService:
 
                         if isinstance(metadata, str):
                             metadata = json.loads(metadata)
-                        cost = metadata.get("cost_pln", 0.0)
-                        if cost > 0:
-                            feedback_cost += cost
-                            feedback_count += 1
+                        if isinstance(metadata, dict):
+                            cost = metadata.get("cost_pln", 0.0)
+                            if cost > 0:
+                                feedback_cost += cost
+                                feedback_count += 1
                     except Exception:
                         pass
 
@@ -450,7 +452,7 @@ class MetricsService:
             ]
 
             # Group by agent type
-            agent_stats = {}
+            agent_stats: Dict[str, Dict[str, Any]] = {}
             for mr in recent_responses:
                 agent_type = mr.agent_type
                 if agent_type not in agent_stats:
@@ -463,7 +465,7 @@ class MetricsService:
 
             # Calculate averages
             for agent_type, stats in agent_stats.items():
-                stats["avg_per_day"] = round(stats["count"] / days, 2) if days > 0 else 0
+                stats["avg_per_day"] = round(stats["count"] / days, 2) if days > 0 else 0.0
 
             return {
                 "agent_statistics": agent_stats,

@@ -4,7 +4,7 @@ import imaplib
 import email
 import email.header
 import re
-from typing import Optional, Dict, List
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 from email.message import Message
 from email.utils import parsedate_to_datetime
@@ -82,7 +82,7 @@ class EmailListener:
         self.email_password = email_password
         self.imap_server = imap_server
         self.imap_port = imap_port
-        self.mail = None
+        self.mail: Optional[imaplib.IMAP4_SSL] = None
 
     def connect(self) -> bool:
         """Connect to IMAP server."""
@@ -162,6 +162,7 @@ class EmailListener:
             if not self.connect():
                 return []
 
+        assert self.mail is not None  # narrow type after connect
         try:
             # Select folder
             status, messages = self.mail.select(folder)
@@ -198,6 +199,8 @@ class EmailListener:
 
                     # Parse email
                     email_body = msg_data[0][1]
+                    if not isinstance(email_body, (bytes, bytearray)):
+                        continue
                     email_message = email.message_from_bytes(email_body)
 
                     # Extract email data
@@ -302,7 +305,7 @@ class EmailListener:
                 if content_type == "text/plain":
                     try:
                         body_bytes = part.get_payload(decode=True)
-                        if body_bytes:
+                        if isinstance(body_bytes, bytes):
                             charset = part.get_content_charset() or "utf-8"
                             body += body_bytes.decode(charset, errors="ignore")
                     except Exception as e:
@@ -312,7 +315,7 @@ class EmailListener:
                     if not body:
                         try:
                             body_bytes = part.get_payload(decode=True)
-                            if body_bytes:
+                            if isinstance(body_bytes, bytes):
                                 charset = part.get_content_charset() or "utf-8"
                                 html_body = body_bytes.decode(charset, errors="ignore")
                                 # Simple HTML to text conversion (remove tags)
@@ -322,10 +325,10 @@ class EmailListener:
         else:
             # Not multipart
             try:
-                body_bytes = email_message.get_payload(decode=True)
-                if body_bytes:
+                payload_bytes: Any = email_message.get_payload(decode=True)
+                if isinstance(payload_bytes, bytes):
                     charset = email_message.get_content_charset() or "utf-8"
-                    body = body_bytes.decode(charset, errors="ignore")
+                    body = payload_bytes.decode(charset, errors="ignore")
             except Exception as e:
                 logger.warning(f"Error decoding email body: {str(e)}")
 
@@ -335,7 +338,7 @@ class EmailListener:
         """Mark email as read."""
         if not self.mail:
             return False
-
+        assert self.mail is not None
         try:
             self.mail.select(folder)
             self.mail.store(uid, "+FLAGS", "\\Seen")
