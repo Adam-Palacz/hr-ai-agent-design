@@ -86,7 +86,7 @@ class BaseAgent:
             "gpt-4o-mini": {"input": 0.15, "output": 0.60},  # USD per 1M tokens
             "gpt-4o": {"input": 2.50, "output": 10.00},  # USD per 1M tokens
             "gpt-4": {"input": 10.00, "output": 30.00},  # USD per 1M tokens
-            "gpt-3.5-turbo": {"input": 0.50, "output": 1.50},  # USD per 1M tokens
+            "gpt-4.1": {"input": 2.20, "output": 8.80},  # USD per 1M tokens
             # Default fallback (assume GPT-4o mini pricing)
             "default": {"input": 0.15, "output": 0.60},
         }

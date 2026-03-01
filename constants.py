@@ -4,9 +4,9 @@
 class ModelNames:
     """Default model names."""
 
-    DEFAULT_PARSING = "gpt-3.5-turbo"
+    DEFAULT_PARSING = "gpt-4.1"
     DEFAULT_VISION = "gpt-4o"
-    DEFAULT_FEEDBACK = "gpt-3.5-turbo"
+    DEFAULT_FEEDBACK = "gpt-    -turbo"
 
 
 class Timeouts:

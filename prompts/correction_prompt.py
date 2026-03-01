@@ -35,14 +35,15 @@ CORRECTION INSTRUCTIONS:
 4. Ensure the tone remains professional, respectful, and supportive
 5. Maintain the original structure and flow of the email
 6. Keep the decision announcement and key messages intact (unless they were part of the problem)
-7. Ensure the corrected email follows all the original guidelines:
+7. Ensure correct Polish throughout (poprawna polszczyzna i brzmienie): correct grammar, spelling, punctuation, inflection (przypadki), verb forms, word order, and natural phrasing—the email must read as fluent, professional Polish
+8. Ensure the corrected email follows all the original guidelines:
    - Starts with: "Dziękujemy za złożenie aplikacji na stanowisko [Stanowisko] w [Firma]."
    - For rejections: "Z przykrością informujemy, że zdecydowaliśmy się procedować z innymi kandydatami."
    - Then: "Chciałbym/chciałabym podzielić się z Tobą opinią dotyczącą Twojej kandydatury."
    - Natural, flowing text (not separate sections)
    - Warm, friendly closing
-8. Do NOT introduce new issues while fixing existing ones
-9. Ensure all facts are accurate and match the CV and HR feedback
+9. Do NOT introduce new issues while fixing existing ones
+10. Ensure all facts are accurate and match the CV and HR feedback
 
 CRITICAL: The corrected email must be:
 - Factually accurate
@@ -51,6 +52,7 @@ CRITICAL: The corrected email must be:
 - Free of discrimination
 - Free of offensive content
 - Supportive and constructive
+- In correct Polish (poprawna polszczyzna): no grammar, spelling, or inflection errors; natural, fluent phrasing (brzmienie)
 
 IMPORTANT OUTPUT REQUIREMENTS:
 - You MUST provide a list of corrections_made describing what you changed

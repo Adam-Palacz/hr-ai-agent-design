@@ -2,6 +2,8 @@
 
 from typing import Optional
 
+from pydantic import ValidationError as PydanticValidationError
+
 from models.cv_models import CVData
 from models.feedback_models import HRFeedback
 from models.job_models import JobOffer
@@ -38,7 +40,10 @@ class FeedbackCorrectionAgent(BaseAgent):
             "}\n\n"
             "- corrections_made must be a list of strings, each describing one change.\n"
             "- Do NOT return a JSON schema or description.\n"
-            "- Do NOT wrap the JSON in markdown code fences."
+            "- Do NOT wrap the JSON in markdown code fences (no ```json).\n"
+            '- CRITICAL for valid JSON: Inside the "html_content" string use escaped newlines only (\\n). '
+            "Do NOT put literal line breaks inside the JSON string—that breaks parsing. "
+            'Example: use "...Cześć,\\n\\nDziękujemy..." not "...Cześć,\n\nDziękujemy...".'
         )
 
         # Store prompt template
@@ -175,24 +180,29 @@ class FeedbackCorrectionAgent(BaseAgent):
                 explanation="Model did not return valid JSON; raw output was wrapped as HTML.",
             )
 
-        html = data.get("html_content")
-        if not html or not isinstance(html, str):
-            raise ValueError("html_content field is required and must be a non-empty string")
-
-        corrections = data.get("corrections_made") or []
-        explanation = data.get("explanation") or ""
-
-        # Ensure corrections_made is a list of strings
-        if not isinstance(corrections, list):
-            corrections = [str(corrections)]
-        else:
-            corrections = [str(c) for c in corrections]
-
-        return CorrectedFeedback(
-            html_content=html,
-            corrections_made=corrections,
-            explanation=str(explanation),
-        )
+        # Validate and coerce via Pydantic (ensures types + html_content is valid HTML)
+        try:
+            return CorrectedFeedback.model_validate(data)
+        except PydanticValidationError as e:
+            # If html_content failed (e.g. plain text without tags), wrap and retry
+            html_raw = data.get("html_content") if isinstance(data.get("html_content"), str) else ""
+            if html_raw and ("html_content" in str(e).lower() or "markup" in str(e).lower()):
+                wrapped = self._wrap_html_if_needed(html_raw)
+                logger.info(
+                    "html_content did not pass HTML validation (e.g. plain text); wrapping in template."
+                )
+                raw_corrections = data.get("corrections_made")
+                corrections = (
+                    [str(c) for c in raw_corrections]
+                    if isinstance(raw_corrections, list)
+                    else [str(raw_corrections)] if raw_corrections else []
+                )
+                return CorrectedFeedback(
+                    html_content=wrapped,
+                    corrections_made=corrections,
+                    explanation=str(data.get("explanation") or ""),
+                )
+            raise ValueError(f"CorrectedFeedback validation failed: {e}") from e
 
     @staticmethod
     def _wrap_html_if_needed(content: str) -> str:
