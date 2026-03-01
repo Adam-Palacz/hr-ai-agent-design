@@ -1,5 +1,7 @@
 """Tests for route helpers."""
 
+from unittest.mock import MagicMock
+
 from routes.helpers import allowed_file, get_next_stage
 from database.schema import RecruitmentStage
 
@@ -27,3 +29,10 @@ def test_get_next_stage_order():
 def test_get_next_stage_last_stage_unchanged():
     """At OFFER stage, get_next_stage returns OFFER."""
     assert get_next_stage(RecruitmentStage.OFFER) == RecruitmentStage.OFFER
+
+
+def test_get_next_stage_unknown_returns_hr_interview():
+    """When stage is not in order (ValueError), get_next_stage returns HR_INTERVIEW."""
+    # Passing a value not in stage_order triggers ValueError and fallback to HR_INTERVIEW
+    result = get_next_stage(MagicMock())
+    assert result == RecruitmentStage.HR_INTERVIEW

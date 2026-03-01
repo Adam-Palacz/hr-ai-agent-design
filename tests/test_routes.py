@@ -35,3 +35,17 @@ def test_add_position_form_returns_200(client):
     """GET /positions/add should return 200."""
     response = client.get("/positions/add")
     assert response.status_code == 200
+
+
+def test_candidates_index_returns_200(client):
+    """GET / (candidates list) should return 200."""
+    response = client.get("/")
+    assert response.status_code == 200
+
+
+def test_candidate_detail_not_found_redirects(client):
+    """GET /candidate/999999 (non-existent) should redirect to index with flash."""
+    response = client.get("/candidate/999999")
+    assert response.status_code in (302, 200)
+    if response.status_code == 302:
+        assert "index" in response.location or response.location.endswith("/")

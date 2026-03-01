@@ -66,9 +66,9 @@ IMPORTANT OUTPUT REQUIREMENTS:
 
 
 # Simple wrapper class to maintain compatibility with .format() calls
-class CORRECTION_PROMPT:
-    def format(self, **kwargs):
+class _CorrectionPromptFormat:
+    def format(self, **kwargs: object) -> str:
         return CORRECTION_PROMPT_TEMPLATE.format(**kwargs)
 
 
-CORRECTION_PROMPT = CORRECTION_PROMPT()
+CORRECTION_PROMPT: _CorrectionPromptFormat = _CorrectionPromptFormat()

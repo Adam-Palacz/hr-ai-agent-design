@@ -181,7 +181,7 @@ DO NOT return:
             result_text = response.choices[0].message.content
 
             # Parse response
-            classification = self._parse_classification_from_text(result_text)
+            classification = self._parse_classification_from_text(result_text or "")
 
             # Validate IOD classification - must have at least ONE critical keyword
             if classification.category == "iod":

@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # type: ignore[attr-defined]
 
 from flask import Flask
 from config import settings

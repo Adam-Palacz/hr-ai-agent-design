@@ -3,7 +3,7 @@ Agent for classifying email inquiries and deciding how to respond.
 """
 
 import json
-from typing import Dict
+from typing import Dict, Optional
 from agents.base_agent import BaseAgent
 
 
@@ -17,7 +17,7 @@ class QueryClassifierAgent(BaseAgent):
     - "forward_to_hr" - forward to HR (specific, sensitive, or human-intervention questions)
     """
 
-    def __init__(self, model_name: str = None, temperature: float = 0.3):
+    def __init__(self, model_name: Optional[str] = None, temperature: float = 0.3):
         from config import settings
 
         model_name = model_name or settings.azure_openai_gpt_deployment
@@ -100,7 +100,8 @@ Jeśli po użyciu RAG nadal nie ma wystarczających, jednoznacznych informacji �
                 response_format={"type": "json_object"},
             )
 
-            result_text = response.choices[0].message.content.strip()
+            content = response.choices[0].message.content
+            result_text = (content or "").strip()
             result = json.loads(result_text)
 
             # Validate result

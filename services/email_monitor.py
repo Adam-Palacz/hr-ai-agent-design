@@ -23,8 +23,8 @@ class EmailMonitor:
         smtp_host: str,
         smtp_port: int,
         smtp_use_tls: bool = True,
-        iod_email: str = None,
-        hr_email: str = None,
+        iod_email: Optional[str] = None,
+        hr_email: Optional[str] = None,
         check_interval: int = 60,
     ):
         """
@@ -59,6 +59,7 @@ class EmailMonitor:
         self.last_msg_num: Optional[int] = None
 
         # Initialize AI classifier
+        self.classifier: Optional[EmailClassifierAgent] = None
         try:
             from config import settings
 

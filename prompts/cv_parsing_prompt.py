@@ -109,9 +109,9 @@ Return ONLY valid JSON matching this exact structure. Do not nest personal_infor
 
 
 # Simple wrapper class to maintain compatibility with .format() calls
-class CV_PARSING_PROMPT:
-    def format(self, **kwargs):
+class _CVParsingPromptFormat:
+    def format(self, **kwargs: object) -> str:
         return CV_PARSING_PROMPT_TEMPLATE.format(**kwargs)
 
 
-CV_PARSING_PROMPT = CV_PARSING_PROMPT()
+CV_PARSING_PROMPT: _CVParsingPromptFormat = _CVParsingPromptFormat()

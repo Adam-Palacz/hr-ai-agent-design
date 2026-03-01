@@ -2,7 +2,7 @@
 
 from typing import Optional, List, Dict
 
-from models.validation_models import ValidationResult
+from models.validation_models import ValidationResult, ValidationStatus
 from prompts.rag_response_validation_prompt import RAG_RESPONSE_VALIDATION_PROMPT
 from core.logger import logger
 from agents.base_agent import BaseAgent
@@ -104,6 +104,8 @@ class RAGResponseValidatorAgent(BaseAgent):
             )
 
             raw_text = response.choices[0].message.content
+            if raw_text is None:
+                raise ValueError("Empty response from RAG validator model")
 
             # Track model response (optional - can be extended to save to database)
             # For now, just log it
@@ -121,7 +123,7 @@ class RAGResponseValidatorAgent(BaseAgent):
 
             # On validation failure, reject by default for safety
             return ValidationResult(
-                status="rejected",
+                status=ValidationStatus.REJECTED,
                 is_approved=False,
                 reasoning=f"Validation process failed: {str(e)}. Response rejected for safety.",
                 issues_found=["Validation process error"],
@@ -161,7 +163,12 @@ class RAGResponseValidatorAgent(BaseAgent):
         data = parse_json_safe(text, fallback_to_extraction=True)
 
         # Map to ValidationResult, with sensible defaults
-        status = data.get("status", "rejected")
+        status_str = data.get("status", "rejected")
+        status = (
+            ValidationStatus(status_str)
+            if status_str in ("approved", "rejected")
+            else ValidationStatus.REJECTED
+        )
         is_approved = bool(data.get("is_approved", False))
         reasoning = data.get("reasoning") or "No reasoning provided."
         issues_found = data.get("issues_found") or []

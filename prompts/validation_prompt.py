@@ -86,9 +86,9 @@ Remember: You validate the generated email content. HR notes were input to gener
 
 
 # Simple wrapper class to maintain compatibility with .format() calls
-class VALIDATION_PROMPT:
-    def format(self, **kwargs):
+class _ValidationPromptFormat:
+    def format(self, **kwargs: object) -> str:
         return VALIDATION_PROMPT_TEMPLATE.format(**kwargs)
 
 
-VALIDATION_PROMPT = VALIDATION_PROMPT()
+VALIDATION_PROMPT: _ValidationPromptFormat = _ValidationPromptFormat()

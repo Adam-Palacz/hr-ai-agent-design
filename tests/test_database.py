@@ -72,3 +72,39 @@ def test_get_all_candidates_returns_list():
     """get_all_candidates should return a list."""
     candidates = get_all_candidates()
     assert isinstance(candidates, list)
+
+
+def test_save_and_get_model_responses_for_candidate():
+    """save_model_response and get_model_responses_for_candidate roundtrip."""
+    from database.model_responses import save_model_response, get_model_responses_for_candidate
+
+    pos = create_position(
+        title="ModelResp Role",
+        company="Test Co",
+        description="For model response test",
+    )
+    assert pos is not None
+    cand = create_candidate(
+        first_name="Model",
+        last_name="Resp",
+        email="modelresp@test.com",
+        position_id=pos.id,
+        status=CandidateStatus.IN_PROGRESS,
+        stage=RecruitmentStage.INITIAL_SCREENING,
+    )
+    assert cand is not None and cand.id is not None
+
+    save_model_response(
+        agent_type="feedback_generator",
+        model_name="gpt-4o",
+        candidate_id=cand.id,
+        input_data={"test": "input"},
+        output_data="<p>Test output</p>",
+        metadata={"tokens": 10},
+    )
+    responses = get_model_responses_for_candidate(cand.id)
+    assert isinstance(responses, list)
+    assert len(responses) >= 1
+    assert responses[0].agent_type == "feedback_generator"
+    assert responses[0].model_name == "gpt-4o"
+    assert responses[0].candidate_id == cand.id

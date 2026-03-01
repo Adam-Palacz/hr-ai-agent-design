@@ -1,7 +1,7 @@
 """Candidate CRUD operations."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from database.db import get_db
 from database.schema import Candidate, CandidateStatus, RecruitmentStage
@@ -75,7 +75,7 @@ def create_candidate(
     stage: RecruitmentStage = RecruitmentStage.INITIAL_SCREENING,
     cv_path: Optional[str] = None,
     consent_for_other_positions: Optional[bool] = None,
-) -> Candidate:
+) -> Optional[Candidate]:
     """Create a new candidate."""
     conn = get_db()
     cursor = conn.cursor()
@@ -99,6 +99,8 @@ def create_candidate(
     candidate_id = cursor.lastrowid
     conn.commit()
     conn.close()
+    if candidate_id is None:
+        return None
     return get_candidate_by_id(candidate_id)
 
 
@@ -117,7 +119,7 @@ def update_candidate(
     conn = get_db()
     cursor = conn.cursor()
     updates = []
-    values = []
+    values: List[Any] = []
     if first_name is not None:
         updates.append("first_name = ?")
         values.append(first_name)

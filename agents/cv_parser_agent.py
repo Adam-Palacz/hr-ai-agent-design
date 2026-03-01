@@ -17,8 +17,8 @@ class CVParserAgent(BaseAgent):
 
     def __init__(
         self,
-        model_name: str = None,
-        temperature: float = None,
+        model_name: Optional[str] = None,
+        temperature: Optional[float] = None,
         api_key: Optional[str] = None,
         vision_model_name: Optional[str] = None,
         use_ocr: bool = True,
@@ -396,6 +396,8 @@ class CVParserAgent(BaseAgent):
                 temperature=self.temperature,
             )
             raw_text = response.choices[0].message.content
+            if raw_text is None:
+                raise ValueError("Empty response from CV parser model")
 
             self._save_model_response(
                 agent_type="cv_parser",

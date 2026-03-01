@@ -14,7 +14,7 @@ class QueryResponderAgent(BaseAgent):
     Can use basic knowledge or RAG from the vector database.
     """
 
-    def __init__(self, model_name: str = None, temperature: float = 0.7):
+    def __init__(self, model_name: Optional[str] = None, temperature: float = 0.7):
         from config import settings
 
         model_name = model_name or settings.openai_model
@@ -86,7 +86,8 @@ PODSTAWOWA WIEDZA O REKRUTACJI:
                 temperature=self.temperature,
             )
 
-            response_text = response.choices[0].message.content.strip()
+            content = response.choices[0].message.content
+            response_text = (content or "").strip()
 
             # Check if agent returned the forward-to-HR signal
             if response_text.upper() == "FORWARD_TO_HR" or "FORWARD_TO_HR" in response_text.upper():

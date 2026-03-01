@@ -1,7 +1,7 @@
 """Ticket CRUD operations."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from database.db import get_db
 from database.schema import (
@@ -113,7 +113,7 @@ def update_ticket(
     conn = get_db()
     cursor = conn.cursor()
     updates = []
-    values = []
+    values: List[Any] = []
     if department is not None:
         updates.append("department = ?")
         values.append(
