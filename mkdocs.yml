@@ -1,0 +1,31 @@
+site_name: Recruitment AI Documentation
+site_description: Documentation for the recruitment AI assistant (HR feedback, email automation, RAG).
+site_url: ""
+
+nav:
+  - Home: index.md
+  - Overview:
+      - Przegląd (PL): OVERVIEW_PL.md
+      - Overview (EN): OVERVIEW_EN.md
+  - Quickstart:
+      - Szybki start (PL): QUICKSTART_PL.md
+      - Quickstart (EN): QUICKSTART_EN.md
+  - Docker:
+      - Uruchomienie w Dockerze (PL): DOCKER_PL.md
+      - Docker guide (EN): DOCKER_EN.md
+  - API Reference:
+      - Agents & Services: api.md
+
+plugins:
+  - mkdocstrings:
+      default_handler: python
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+theme:
+  name: material

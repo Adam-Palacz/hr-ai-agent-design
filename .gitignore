@@ -59,6 +59,10 @@ _ksiazka
 # mypy
 .mypy_cache
 
+# Documentation build output
+site/
+docs/_build/
+
 # pytest
 .pytest_cache
 .ruff_cache

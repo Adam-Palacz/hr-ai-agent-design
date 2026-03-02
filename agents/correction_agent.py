@@ -19,7 +19,7 @@ class FeedbackCorrectionAgent(BaseAgent):
 
     def __init__(
         self,
-        model_name: str = "gpt-4o",
+        model_name: str = "gpt-4.1-nano",
         temperature: float = 0.3,
         api_key: Optional[str] = None,
         timeout: int = 120,

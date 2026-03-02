@@ -17,7 +17,7 @@ class FeedbackValidatorAgent(BaseAgent):
 
     def __init__(
         self,
-        model_name: str = "gpt-4o",
+        model_name: str = "gpt-4.1-nano",
         temperature: float = 0.0,
         api_key: Optional[str] = None,
         timeout: int = 120,
