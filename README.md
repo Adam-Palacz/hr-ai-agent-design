@@ -2,6 +2,27 @@
 
 Web application for HR teams to manage recruitment: review CVs, track candidates through stages, and send AI-generated feedback emails. Includes optional email monitoring (IMAP) with automatic routing and RAG-based answers to candidate inquiries.
 
+## Documentation
+
+- **High‑level overview (non‑technical):**
+  - Polish: `docs/OVERVIEW_PL.md`
+  - English: `docs/OVERVIEW_EN.md`
+- **Quickstart guides (from scratch):**
+  - Polish: `docs/QUICKSTART_PL.md`
+  - English: `docs/QUICKSTART_EN.md`
+- **Running with Docker:**
+  - Polish: `docs/DOCKER_PL.md`
+  - English: `docs/DOCKER_EN.md`
+- **Generated API reference (MkDocs + mkdocstrings):**
+  - Build and serve locally:
+
+    ```bash
+    pip install -r requirements-docs.txt
+    mkdocs serve
+    ```
+
+    Then open `http://127.0.0.1:8000/` in your browser.
+
 ## Features
 
 - **Candidate management** – Add/edit candidates, upload PDF CVs, track status and recruitment stage (initial screening → HR interview → technical assessment → final interview → offer).

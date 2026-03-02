@@ -293,7 +293,7 @@ class CVParserAgent(BaseAgent):
         if estimated_prompt_length > 20000 and "gpt-5" in self.model_name.lower():
             logger.warning(
                 f"Warning: Prompt may be too long for {self.model_name}. "
-                f"Consider using gpt-4o or gpt-4.1 for better reliability with long CVs."
+                f"Consider using gpt-4o-mini or gpt-4.1-nano for better reliability with long CVs."
             )
 
         # Run LLM via Azure OpenAI
