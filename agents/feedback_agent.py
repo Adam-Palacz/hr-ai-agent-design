@@ -89,15 +89,14 @@ class FeedbackAgent(BaseAgent):
             output_format=format_str,
         )
 
-        # Call Azure OpenAI chat completions
+        # Call LLM via adapter
         raw_text = None
         try:
             logger.info(
                 f"Generating feedback for candidate: {candidate_name} (stage: {recruitment_stage_str})"
             )
 
-            response = self.client.chat.completions.create(
-                model=self.model_name,
+            raw_text, response = self._chat(
                 messages=[
                     {
                         "role": "system",
@@ -109,11 +108,9 @@ class FeedbackAgent(BaseAgent):
                     {"role": "user", "content": prompt_text},
                 ],
                 max_completion_tokens=4000,
-                temperature=self.temperature,
             )
 
-            raw_text = response.choices[0].message.content
-            if raw_text is None:
+            if not raw_text:
                 raise ValueError("Empty response from model")
 
             # Track model response (with token usage and cost)

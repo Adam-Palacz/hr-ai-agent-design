@@ -308,8 +308,7 @@ class CVParserAgent(BaseAgent):
             # Build prompt text
             prompt_text = CV_PARSING_PROMPT.format(cv_text=cv_text)
 
-            response = self.client.chat.completions.create(
-                model=self.model_name,
+            raw_text, response = self._chat(
                 messages=[
                     {
                         "role": "system",
@@ -320,15 +319,7 @@ class CVParserAgent(BaseAgent):
                     },
                     {"role": "user", "content": prompt_text},
                 ],
-                # max_completion_tokens=4000,
-                temperature=self.temperature,
             )
-
-            raw_text = ""
-            if response and response.choices:
-                msg = response.choices[0].message
-                if msg and msg.content:
-                    raw_text = msg.content
 
             if not raw_text or not str(raw_text).strip():
                 raise Exception(
@@ -375,13 +366,12 @@ class CVParserAgent(BaseAgent):
         Returns:
             CVData object with parsed information
         """
-        # Run LLM via Azure OpenAI
+        # Run LLM via adapter
         try:
             # Build prompt text
             prompt_text = CV_PARSING_PROMPT.format(cv_text=cv_text)
 
-            response = self.client.chat.completions.create(
-                model=self.model_name,
+            raw_text, response = self._chat(
                 messages=[
                     {
                         "role": "system",
@@ -392,11 +382,8 @@ class CVParserAgent(BaseAgent):
                     },
                     {"role": "user", "content": prompt_text},
                 ],
-                # max_completion_tokens=4000,
-                temperature=self.temperature,
             )
-            raw_text = response.choices[0].message.content
-            if raw_text is None:
+            if not raw_text:
                 raise ValueError("Empty response from CV parser model")
 
             self._save_model_response(

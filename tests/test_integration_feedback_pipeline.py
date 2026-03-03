@@ -22,8 +22,8 @@ def _make_completion(content: str):
 
 
 @pytest.mark.integration
-@patch("agents.base_agent.AzureOpenAI")
-def test_feedback_pipeline_generate_validate_approved(mock_azure):
+@patch("agents.base_agent.get_llm_client")
+def test_feedback_pipeline_generate_validate_approved(mock_get_llm):
     """Full pipeline: generate feedback -> validate (approved) -> final result has html_content and is_validated True."""
     html = "<!DOCTYPE html><html><body><p>Dear Jan,</p><p>Thank you for applying.</p></body></html>"
     validation_approved = json.dumps(
@@ -38,12 +38,12 @@ def test_feedback_pipeline_generate_validate_approved(mock_azure):
         }
     )
 
-    mock_client = MagicMock()
-    mock_client.chat.completions.create.side_effect = [
-        _make_completion(json.dumps({"html_content": html})),
-        _make_completion(validation_approved),
+    mock_adapter = MagicMock()
+    mock_adapter.complete.side_effect = [
+        (json.dumps({"html_content": html}), _make_completion(json.dumps({"html_content": html}))),
+        (validation_approved, _make_completion(validation_approved)),
     ]
-    mock_azure.return_value = mock_client
+    mock_get_llm.return_value = mock_adapter
 
     from agents.feedback_agent import FeedbackAgent
     from agents.validation_agent import FeedbackValidatorAgent
@@ -89,8 +89,8 @@ def test_feedback_pipeline_generate_validate_approved(mock_azure):
 
 
 @pytest.mark.integration
-@patch("agents.base_agent.AzureOpenAI")
-def test_feedback_pipeline_rejected_then_corrected(mock_azure):
+@patch("agents.base_agent.get_llm_client")
+def test_feedback_pipeline_rejected_then_corrected(mock_get_llm):
     """Pipeline: generate -> validate (rejected) -> correct -> final feedback is corrected HTML."""
     html1 = "<p>Hey Jan,</p><p>Thanks.</p>"
     validation_rejected = json.dumps(
@@ -124,14 +124,17 @@ def test_feedback_pipeline_rejected_then_corrected(mock_azure):
         }
     )
 
-    mock_client = MagicMock()
-    mock_client.chat.completions.create.side_effect = [
-        _make_completion(json.dumps({"html_content": html1})),
-        _make_completion(validation_rejected),
-        _make_completion(correction_json),
-        _make_completion(validation_approved),
+    mock_adapter = MagicMock()
+    mock_adapter.complete.side_effect = [
+        (
+            json.dumps({"html_content": html1}),
+            _make_completion(json.dumps({"html_content": html1})),
+        ),
+        (validation_rejected, _make_completion(validation_rejected)),
+        (correction_json, _make_completion(correction_json)),
+        (validation_approved, _make_completion(validation_approved)),
     ]
-    mock_azure.return_value = mock_client
+    mock_get_llm.return_value = mock_adapter
 
     from agents.feedback_agent import FeedbackAgent
     from agents.validation_agent import FeedbackValidatorAgent

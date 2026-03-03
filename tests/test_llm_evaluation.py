@@ -105,20 +105,21 @@ def test_evaluation_criteria_email_leak_passes(good_html):
     assert check_no_email_leak(good_html) is True
 
 
-@patch("agents.base_agent.AzureOpenAI")
-def test_evaluation_mock_llm_output_passes_all_criteria(mock_azure, good_html):
+@patch("agents.base_agent.get_llm_client")
+def test_evaluation_mock_llm_output_passes_all_criteria(mock_get_llm, good_html):
     """With mock LLM returning good HTML, all evaluation criteria pass."""
     import json
     from agents.feedback_agent import FeedbackAgent
     from models.cv_models import CVData
     from models.feedback_models import HRFeedback, Decision
 
-    mock_client = MagicMock()
-    mock_client.chat.completions.create.return_value = MagicMock(
+    mock_adapter = MagicMock()
+    completion = MagicMock(
         choices=[MagicMock(message=MagicMock(content=json.dumps({"html_content": good_html})))],
         usage=MagicMock(prompt_tokens=10, completion_tokens=20, total_tokens=30),
     )
-    mock_azure.return_value = mock_client
+    mock_adapter.complete.return_value = (json.dumps({"html_content": good_html}), completion)
+    mock_get_llm.return_value = mock_adapter
 
     agent = FeedbackAgent(model_name="gpt-4o-mini")
     cv = CVData(

@@ -162,9 +162,8 @@ DO NOT return:
                 format_instructions=self.format_instructions,
             )
 
-            # Get classification from Azure OpenAI
-            response = self.client.chat.completions.create(
-                model=self.model_name,
+            # Get classification via LLM adapter
+            result_text, _ = self._chat(
                 messages=[
                     {
                         "role": "system",
@@ -176,9 +175,7 @@ DO NOT return:
                     {"role": "user", "content": prompt},
                 ],
                 max_completion_tokens=500,
-                temperature=self.temperature,
             )
-            result_text = response.choices[0].message.content
 
             # Parse response
             classification = self._parse_classification_from_text(result_text or "")

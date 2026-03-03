@@ -54,9 +54,9 @@ def sample_validation_result():
     )
 
 
-@patch("agents.base_agent.AzureOpenAI")
+@patch("agents.base_agent.get_llm_client")
 def test_correction_agent_returns_corrected_feedback(
-    mock_azure, sample_cv_data, sample_hr_feedback, sample_validation_result
+    mock_get_llm, sample_cv_data, sample_hr_feedback, sample_validation_result
 ):
     """Given original HTML and validation result, agent returns CorrectedFeedback with html_content and corrections_made."""
     corrected_html = "<p>Dear Jan,</p><p>Thank you for your application.</p>"
@@ -67,9 +67,9 @@ def test_correction_agent_returns_corrected_feedback(
             "explanation": "Updated to formal language.",
         }
     )
-    mock_client = MagicMock()
-    mock_client.chat.completions.create.return_value = _make_completion(correction_json)
-    mock_azure.return_value = mock_client
+    mock_adapter = MagicMock()
+    mock_adapter.complete.return_value = (correction_json, _make_completion(correction_json))
+    mock_get_llm.return_value = mock_adapter
 
     from agents.correction_agent import FeedbackCorrectionAgent
 
@@ -83,8 +83,8 @@ def test_correction_agent_returns_corrected_feedback(
 
     assert result.html_content == corrected_html
     assert len(result.corrections_made) > 0
-    mock_client.chat.completions.create.assert_called_once()
-    call_messages = mock_client.chat.completions.create.call_args[1]["messages"]
+    mock_adapter.complete.assert_called_once()
+    call_messages = mock_adapter.complete.call_args[1]["messages"]
     user_content = next(
         (m.get("content", "") for m in call_messages if m.get("role") == "user"), ""
     )

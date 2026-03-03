@@ -83,12 +83,11 @@ class RAGResponseValidatorAgent(BaseAgent):
             format_instructions=self.format_instructions,
         )
 
-        # Run validation via Azure OpenAI
+        # Run validation via LLM adapter
         try:
             logger.info(f"Validating RAG response for inquiry from {sender_email}")
 
-            response = self.client.chat.completions.create(
-                model=self.model_name,
+            raw_text, response = self._chat(
                 messages=[
                     {
                         "role": "system",
@@ -100,11 +99,9 @@ class RAGResponseValidatorAgent(BaseAgent):
                     {"role": "user", "content": prompt_text},
                 ],
                 max_completion_tokens=2000,
-                temperature=self.temperature,
             )
 
-            raw_text = response.choices[0].message.content
-            if raw_text is None:
+            if not raw_text:
                 raise ValueError("Empty response from RAG validator model")
 
             # Track model response (optional - can be extended to save to database)

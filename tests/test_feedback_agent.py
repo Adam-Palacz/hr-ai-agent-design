@@ -40,15 +40,16 @@ def sample_hr_feedback():
     )
 
 
-@patch("agents.base_agent.AzureOpenAI")
-def test_feedback_agent_returns_html_content(mock_azure, sample_cv_data, sample_hr_feedback):
+@patch("agents.base_agent.get_llm_client")
+def test_feedback_agent_returns_html_content(mock_get_llm, sample_cv_data, sample_hr_feedback):
     """Given valid CV and HR feedback, agent returns CandidateFeedback with HTML."""
     html = "<p>Dear Jan,</p><p>Thank you for applying.</p>"
-    mock_client = MagicMock()
-    mock_client.chat.completions.create.return_value = _make_completion(
-        json.dumps({"html_content": html})
+    mock_adapter = MagicMock()
+    mock_adapter.complete.return_value = (
+        json.dumps({"html_content": html}),
+        _make_completion(html),
     )
-    mock_azure.return_value = mock_client
+    mock_get_llm.return_value = mock_adapter
 
     from agents.feedback_agent import FeedbackAgent
 
@@ -57,17 +58,17 @@ def test_feedback_agent_returns_html_content(mock_azure, sample_cv_data, sample_
 
     assert result.html_content is not None
     assert "<" in result.html_content and ">" in result.html_content
-    mock_client.chat.completions.create.assert_called_once()
-    call_messages = mock_client.chat.completions.create.call_args[1]["messages"]
+    mock_adapter.complete.assert_called_once()
+    call_messages = mock_adapter.complete.call_args[1]["messages"]
     assert any("Jan" in (m.get("content") or "") for m in call_messages)
 
 
-@patch("agents.base_agent.AzureOpenAI")
-def test_feedback_agent_llm_error_propagates(mock_azure, sample_cv_data, sample_hr_feedback):
+@patch("agents.base_agent.get_llm_client")
+def test_feedback_agent_llm_error_propagates(mock_get_llm, sample_cv_data, sample_hr_feedback):
     """When LLM raises, agent propagates exception."""
-    mock_client = MagicMock()
-    mock_client.chat.completions.create.side_effect = Exception("API error")
-    mock_azure.return_value = mock_client
+    mock_adapter = MagicMock()
+    mock_adapter.complete.side_effect = Exception("API error")
+    mock_get_llm.return_value = mock_adapter
 
     from agents.feedback_agent import FeedbackAgent
 

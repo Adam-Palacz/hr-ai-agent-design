@@ -107,8 +107,7 @@ class FeedbackCorrectionAgent(BaseAgent):
         try:
             logger.info(f"Correcting feedback email for: {cv_data.full_name}")
 
-            response = self.client.chat.completions.create(
-                model=self.model_name,
+            raw_text, response = self._chat(
                 messages=[
                     {
                         "role": "system",
@@ -120,11 +119,9 @@ class FeedbackCorrectionAgent(BaseAgent):
                     {"role": "user", "content": prompt_text},
                 ],
                 max_completion_tokens=3000,
-                temperature=self.temperature,
             )
 
-            raw_text = response.choices[0].message.content
-            if raw_text is None:
+            if not raw_text:
                 raise ValueError("Empty response from model")
 
             # Track model response (with token usage and cost)

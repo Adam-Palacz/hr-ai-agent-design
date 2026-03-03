@@ -80,12 +80,11 @@ class FeedbackValidatorAgent(BaseAgent):
             format_instructions=self.format_instructions,
         )
 
-        # Run validation via Azure OpenAI
+        # Run validation via LLM adapter
         try:
             logger.info(f"Validating feedback email for: {cv_data.full_name}")
 
-            response = self.client.chat.completions.create(
-                model=self.model_name,
+            raw_text, response = self._chat(
                 messages=[
                     {
                         "role": "system",
@@ -97,11 +96,9 @@ class FeedbackValidatorAgent(BaseAgent):
                     {"role": "user", "content": prompt_text},
                 ],
                 max_completion_tokens=2000,
-                temperature=self.temperature,
             )
 
-            raw_text = response.choices[0].message.content
-            if raw_text is None:
+            if not raw_text:
                 raise ValueError("Empty response from model")
 
             # Track model response (with token usage and cost)
