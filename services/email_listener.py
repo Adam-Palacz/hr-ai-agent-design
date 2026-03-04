@@ -13,7 +13,7 @@ from core.logger import logger
 
 
 class EmailListener:
-    """Service for listening to incoming Gmail emails."""
+    """Service for listening to incoming emails via IMAP."""
 
     # Keywords for IOD/RODO classification
     IOD_KEYWORDS = [
@@ -75,7 +75,7 @@ class EmailListener:
         Args:
             email_username: Email username/address
             email_password: Email password or app password
-            imap_server: IMAP server address (default: imap.zoho.com)
+            imap_server: IMAP server address (default: imap.zoho.com; can be any provider)
             imap_port: IMAP server port (default: 993 for SSL)
         """
         self.email_username = email_username

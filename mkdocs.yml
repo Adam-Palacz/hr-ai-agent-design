@@ -13,6 +13,9 @@ nav:
   - Docker:
       - Uruchomienie w Dockerze (PL): DOCKER_PL.md
       - Docker guide (EN): DOCKER_EN.md
+  - Email:
+      - Konfiguracja e‑mail (PL): EMAIL_SETUP_PL.md
+      - Email setup (EN): EMAIL_SETUP_EN.md
   - API Reference:
       - Agents & Services: api.md
 

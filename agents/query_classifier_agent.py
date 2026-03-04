@@ -87,8 +87,7 @@ Jeśli po użyciu RAG nadal nie ma wystarczających, jednoznacznych informacji �
         prompt = self._create_classification_prompt(email_subject, email_body, sender_email)
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model_name,
+            result_text, _ = self._chat(
                 messages=[
                     {
                         "role": "system",
@@ -96,12 +95,11 @@ Jeśli po użyciu RAG nadal nie ma wystarczających, jednoznacznych informacji �
                     },
                     {"role": "user", "content": prompt},
                 ],
-                temperature=self.temperature,
+                # response_format is only understood by some providers; pass through
                 response_format={"type": "json_object"},
             )
 
-            content = response.choices[0].message.content
-            result_text = (content or "").strip()
+            result_text = (result_text or "").strip()
             result = json.loads(result_text)
 
             # Validate result

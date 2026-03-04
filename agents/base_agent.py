@@ -1,13 +1,12 @@
 """Base agent class with common functionality."""
 
-from typing import Any, Callable, Optional
-from openai import AzureOpenAI
+from typing import Any, Callable, Optional, Dict, List, Tuple
 
-from config import settings
 from utils.formatting import format_cv_data, format_hr_feedback, format_job_offer
 from models.cv_models import CVData
 from models.feedback_models import HRFeedback
 from models.job_models import JobOffer
+from llm import get_llm_client
 
 # Import for tracking model responses
 save_model_response: Optional[Callable[..., Any]] = None
@@ -20,7 +19,7 @@ except ImportError:
 
 
 class BaseAgent:
-    """Base class for all Azure OpenAI agents."""
+    """Base class for all LLM-backed agents."""
 
     def __init__(
         self,
@@ -31,12 +30,12 @@ class BaseAgent:
         max_retries: int = 2,
     ):
         """
-        Initialize base agent with Azure OpenAI client.
+        Initialize base agent with shared LLM adapter.
 
         Args:
-            model_name: Azure OpenAI deployment name
+            model_name: Logical model name / deployment name
             temperature: Model temperature
-            api_key: Optional API key (uses settings if not provided)
+            api_key: Optional API key (currently used only by some providers)
             timeout: Request timeout in seconds
             max_retries: Maximum number of retries
         """
@@ -45,12 +44,9 @@ class BaseAgent:
         self.timeout = timeout
         self.max_retries = max_retries
 
-        api_key_to_use = api_key or settings.api_key
-        self.client = AzureOpenAI(
-            api_version=settings.azure_openai_api_version,
-            azure_endpoint=settings.azure_openai_endpoint,
-            api_key=api_key_to_use,
-        )
+        # Provider-specific details are hidden behind the adapter
+        # (Azure OpenAI by default, OpenAI when configured).
+        self.llm = get_llm_client()
 
     def _format_cv_data(self, cv_data: CVData) -> str:
         """Format CV data for prompt."""
@@ -65,6 +61,31 @@ class BaseAgent:
     def _format_job_offer(self, job_offer: JobOffer) -> str:
         """Format job offer for prompt."""
         return format_job_offer(job_offer)
+
+    def _chat(
+        self,
+        messages: List[Dict[str, Any]],
+        max_completion_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+        model_name: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Tuple[str, Any]:
+        """
+        Helper to call the underlying LLM adapter.
+
+        Returns:
+            Tuple of (content, raw_response).
+        """
+        temp = temperature if temperature is not None else self.temperature
+        model = model_name or self.model_name
+        content, response = self.llm.complete(
+            messages=messages,
+            model=model,
+            temperature=temp,
+            max_completion_tokens=max_completion_tokens,
+            **kwargs,
+        )
+        return content, response
 
     def _calculate_cost(
         self, input_tokens: int, output_tokens: int, model_name: Optional[str] = None

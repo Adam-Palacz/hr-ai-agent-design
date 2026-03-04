@@ -36,7 +36,7 @@ Web application for HR teams to manage recruitment: review CVs, track candidates
 ## Tech stack
 
 - **Backend:** Python 3.11, Flask
-- **AI:** Azure OpenAI (GPT, embeddings)
+- **AI:** Azure OpenAI (GPT, embeddings) by default; optional OpenAI (api.openai.com) via LLM adapter
 - **Vector DB:** Qdrant
 - **Database:** SQLite
 - **Email:** SMTP (sending), IMAP (monitoring)
@@ -103,7 +103,39 @@ Optional – email sending and monitoring:
 | `HR_EMAIL` | HR inbox for forwarded queries |
 | `EMAIL_CHECK_INTERVAL` | Seconds between IMAP checks (default `60`) |
 
+> The app works with any SMTP/IMAP provider compatible with the configured
+> host/port/TLS (Zoho, Gmail, Office 365, etc.). Zoho hostnames in examples
+> are just defaults and can be replaced with your provider’s settings.
+> For concrete setup examples, see `docs/EMAIL_SETUP_PL.md` (PL) or
+> `docs/EMAIL_SETUP_EN.md` (EN).
+
 Other optional: `PRIVACY_POLICY_URL`, `COMPANY_WEBSITE`, `LOG_LEVEL`, `VERBOSE`, `QDRANT_HOST`, `QDRANT_PORT` (when using external Qdrant).
+
+### LLM provider (Azure / OpenAI)
+
+By default the app uses **Azure OpenAI**. There is an adapter layer which allows
+switching to the official OpenAI API.
+
+- `LLM_PROVIDER` – `azure` (default) or `openai`.
+
+**When `LLM_PROVIDER=azure` (default):**
+
+- Azure variables above must be set (`AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, etc.).
+
+**When `LLM_PROVIDER=openai`:**
+
+- `OPENAI_API_KEY` – OpenAI API key (required).
+- `OPENAI_BASE_URL` – optional, default `https://api.openai.com/v1`.
+- `OPENAI_CHAT_MODEL` – optional, e.g. `gpt-4o` (if not set, a reasonable default is used).
+
+To switch provider:
+
+1. Set `LLM_PROVIDER=openai` in `.env`.
+2. Set `OPENAI_API_KEY` (and optionally `OPENAI_BASE_URL` / `OPENAI_CHAT_MODEL`).
+3. Restart the app.
+
+> Uwaga: w tej wersji MVP embeddingi (Qdrant) i część funkcji e‑mail mogą nadal
+> korzystać wyłącznie z konfiguracji Azure.
 
 ### 3. Database and seed data
 

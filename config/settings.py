@@ -12,8 +12,13 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore"
     )
 
+    # LLM provider selection
+    # azure  – current default, uses Azure OpenAI
+    # openai – optional, uses api.openai.com via OpenAI official client
+    llm_provider: str = "azure"
+
     # Azure OpenAI Configuration (single source of truth for models)
-    # This is the *only* actively used API – classic OpenAI is disabled.
+    # This is the default and currently most supported provider.
     azure_openai_api_key: Optional[str] = None
     azure_openai_endpoint: str = "https://openai-agentai-pl.openai.azure.com/"
     azure_openai_api_version: str = "2024-12-01-preview"
@@ -21,8 +26,9 @@ class Settings(BaseSettings):
     azure_openai_gpt_deployment: str = "gpt-5-mini"
     azure_openai_vision_deployment: str = "gpt-5-nano"
 
-    # Alias for the current text model „bieżący model tekstowy” – always points to Azure deployment
-    # Set in model_post_init to azure_openai_gpt_deployment
+    # Alias for the current text model „bieżący model tekstowy” – usually points
+    # to the Azure deployment; can also be used as a logical model name for
+    # other providers (e.g. OpenAI) when LLM_PROVIDER=openai.
     openai_model: str = "gpt-5-nano"
     openai_vision_model: str = "gpt-5-nano"
 
@@ -80,12 +86,20 @@ class Settings(BaseSettings):
         """Backward compatibility: returns email_password."""
         return self.email_password
 
+    # OpenAI official (api.openai.com) configuration – used when llm_provider="openai"
+    openai_api_key: Optional[str] = None
+    openai_base_url: Optional[str] = None
+    openai_chat_model: Optional[str] = None
+
     @property
     def api_key(self) -> str:
         """
-        Returns the API key for Azure OpenAI.
+        Returns the API key for **Azure OpenAI**.
 
-        Classic OPENAI_API_KEY is no longer used – everything goes through Azure.
+        This property is intentionally Azure-specific and used by parts of the
+        code that historically relied on `AZURE_OPENAI_API_KEY`. The new
+        OpenAI (api.openai.com) support uses `openai_api_key` directly,
+        without going through this property.
         """
         if not self.azure_openai_api_key:
             raise ValueError(

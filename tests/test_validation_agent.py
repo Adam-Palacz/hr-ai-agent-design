@@ -40,9 +40,9 @@ def sample_hr_feedback():
     )
 
 
-@patch("agents.base_agent.AzureOpenAI")
+@patch("agents.base_agent.get_llm_client")
 def test_validation_agent_approved_returns_validation_result(
-    mock_azure, sample_cv_data, sample_hr_feedback
+    mock_get_llm, sample_cv_data, sample_hr_feedback
 ):
     """When LLM returns approved JSON, agent returns ValidationResult with is_approved True."""
     validation_json = json.dumps(
@@ -56,9 +56,9 @@ def test_validation_agent_approved_returns_validation_result(
             "suggestions": [],
         }
     )
-    mock_client = MagicMock()
-    mock_client.chat.completions.create.return_value = _make_completion(validation_json)
-    mock_azure.return_value = mock_client
+    mock_adapter = MagicMock()
+    mock_adapter.complete.return_value = (validation_json, _make_completion(validation_json))
+    mock_get_llm.return_value = mock_adapter
 
     from agents.validation_agent import FeedbackValidatorAgent
 
@@ -70,8 +70,8 @@ def test_validation_agent_approved_returns_validation_result(
     assert "reasoning" in result.reasoning.lower() or "appropriate" in result.reasoning.lower()
 
 
-@patch("agents.base_agent.AzureOpenAI")
-def test_validation_agent_rejected_returns_issues(mock_azure, sample_cv_data, sample_hr_feedback):
+@patch("agents.base_agent.get_llm_client")
+def test_validation_agent_rejected_returns_issues(mock_get_llm, sample_cv_data, sample_hr_feedback):
     """When LLM returns rejected JSON, agent returns ValidationResult with issues_found."""
     validation_json = json.dumps(
         {
@@ -84,9 +84,9 @@ def test_validation_agent_rejected_returns_issues(mock_azure, sample_cv_data, sa
             "suggestions": ["Use formal tone"],
         }
     )
-    mock_client = MagicMock()
-    mock_client.chat.completions.create.return_value = _make_completion(validation_json)
-    mock_azure.return_value = mock_client
+    mock_adapter = MagicMock()
+    mock_adapter.complete.return_value = (validation_json, _make_completion(validation_json))
+    mock_get_llm.return_value = mock_adapter
 
     from agents.validation_agent import FeedbackValidatorAgent
 

@@ -74,8 +74,7 @@ PODSTAWOWA WIEDZA O REKRUTACJI:
         prompt = self._create_response_prompt(email_subject, email_body, sender_email, rag_context)
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model_name,
+            response_text, _ = self._chat(
                 messages=[
                     {
                         "role": "system",
@@ -83,11 +82,9 @@ PODSTAWOWA WIEDZA O REKRUTACJI:
                     },
                     {"role": "user", "content": prompt},
                 ],
-                temperature=self.temperature,
             )
 
-            content = response.choices[0].message.content
-            response_text = (content or "").strip()
+            response_text = (response_text or "").strip()
 
             # Check if agent returned the forward-to-HR signal
             if response_text.upper() == "FORWARD_TO_HR" or "FORWARD_TO_HR" in response_text.upper():
