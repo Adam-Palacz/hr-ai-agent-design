@@ -103,6 +103,12 @@ Optional – email sending and monitoring:
 | `HR_EMAIL` | HR inbox for forwarded queries |
 | `EMAIL_CHECK_INTERVAL` | Seconds between IMAP checks (default `60`) |
 
+> The app works with any SMTP/IMAP provider compatible with the configured
+> host/port/TLS (Zoho, Gmail, Office 365, etc.). Zoho hostnames in examples
+> are just defaults and can be replaced with your provider’s settings.
+> For concrete setup examples, see `docs/EMAIL_SETUP_PL.md` (PL) or
+> `docs/EMAIL_SETUP_EN.md` (EN).
+
 Other optional: `PRIVACY_POLICY_URL`, `COMPANY_WEBSITE`, `LOG_LEVEL`, `VERBOSE`, `QDRANT_HOST`, `QDRANT_PORT` (when using external Qdrant).
 
 ### LLM provider (Azure / OpenAI)
