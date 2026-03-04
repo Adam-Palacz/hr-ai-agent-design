@@ -36,12 +36,23 @@ class OpenAILLMAdapter(LLMAdapter):
     ) -> Tuple[str, Any]:
         model_name = model or self.default_model or "gpt-4o-mini"
 
+        # OpenAI SDK expects `max_tokens` instead of `max_completion_tokens`.
+        # Translate adapter argument into the correct parameter and make sure
+        # we don't forward `max_completion_tokens` via kwargs.
+        request_kwargs: Dict[str, Any] = dict(kwargs)
+
+        # If caller provided max_tokens explicitly in kwargs, respect it.
+        # Otherwise, map max_completion_tokens -> max_tokens.
+        if "max_completion_tokens" in request_kwargs:
+            request_kwargs.pop("max_completion_tokens", None)
+        if max_completion_tokens is not None and "max_tokens" not in request_kwargs:
+            request_kwargs["max_tokens"] = max_completion_tokens
+
         response = self.client.chat.completions.create(
             model=model_name,
             messages=messages,
             temperature=temperature,
-            max_completion_tokens=max_completion_tokens,
-            **kwargs,
+            **request_kwargs,
         )
 
         content = response.choices[0].message.content or ""
