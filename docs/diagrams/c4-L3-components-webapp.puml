@@ -1,0 +1,43 @@
+@startuml C4_L3_Components_WebApp
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+Person(hr, "HR user", "Uses the web UI.")
+Person(candidate, "Candidate", "Receives and replies to emails.")
+
+System_Boundary(system, "Recruitment AI system") {
+
+    Container_Boundary(web, "Flask Web App") {
+        Component(api, "HTTP API + UI", "Flask routes & templates", "Candidate/position/ticket CRUD, admin, health.")
+        Component(workflow, "Workflow Orchestrator", "Python services", "Feedback loop and inbound-email loop.")
+        Component(llmGateway, "LLM Gateway / Adapter", "llm/*", "Abstraction over Azure/OpenAI clients; logging, retries.")
+        Component(agentRuntime, "Agent Runtime", "agents/*", "CV parser, feedback, validation, correction, classifiers, responder.")
+        Component(emailAdapter, "Email Adapter", "services/email_*", "SMTP sender and IMAP listener.")
+        Component(persistence, "Persistence Layer", "database/*", "SQLite models, CRUD helpers, seed/load scripts.")
+        Component(ragStore, "RAG Store integration", "services/qdrant_service.py", "Qdrant client wrapper for RAG.")
+    }
+
+    ContainerDb(db, "SQLite database", "SQLite file", "Application data.")
+}
+
+Container_Ext(qdrant, "Qdrant", "Vector DB", "Embeddings & documents for RAG.")
+Container_Ext(mail, "Mail server", "SMTP/IMAP", "Email transport.")
+Container_Ext(llm, "LLM provider", "Azure OpenAI / OpenAI", "Chat-completion style LLM.")
+
+Rel(hr, api, "Uses via browser")
+Rel(candidate, mail, "Sends/receives email")
+
+Rel(api, workflow, "Triggers flows (feedback, inbound email actions)")
+Rel(workflow, agentRuntime, "Invokes agents")
+Rel(agentRuntime, llmGateway, "LLM calls")
+Rel(llmGateway, llm, "Uses provider API")
+Rel(workflow, emailAdapter, "Sends feedback / auto replies")
+Rel(emailAdapter, mail, "SMTP/IMAP")
+Rel(workflow, persistence, "Reads/writes domain data")
+Rel(persistence, db, "Persists data")
+Rel(agentRuntime, ragStore, "Uses RAG context")
+Rel(ragStore, qdrant, "Vector operations")
+
+SHOW_LEGEND()
+
+@enduml

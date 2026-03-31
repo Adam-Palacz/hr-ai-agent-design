@@ -65,141 +65,99 @@ From the container point of view, the system typically consists of:
 
 ---
 
-## 3. Components (C4 L3 – inside the Flask web app)
+## 3. Components (C4 L3 – layers inside the web app)
 
-This section describes the main components **inside the Flask web application**.
+This section describes the main **architectural layers** inside the Flask web application (not a file-by-file list; see **Appendix: Code map** for that).
 
-### 3.1 Flask and routes
+### 3.1 Layer overview
 
-- **Flask app (`app.py`)**
-  - Creates the Flask application, initializes configuration and database, seeds example data on first run, and registers route blueprints.
-  - Exposes health and index routes, and orchestrates candidate operations (add, reject, process).
+| Layer | Responsibility |
+|-------|----------------|
+| **HTTP API + UI** | Flask routes and templates; exposes candidate/position/ticket CRUD, process (reject/accept), admin, health. |
+| **Workflow Orchestrator** | Runs the feedback loop (CV → parse → draft → validate → correct → send) and the inbound-email loop (fetch → classify → route / reply). |
+| **LLM Gateway / Adapter** | Single entry point to Azure OpenAI or OpenAI; retries, timeouts, logging; prompt templates live in `prompts/`. Agents call through this layer only. |
+| **Agent Runtime** | CV Parser, Feedback, Validation, Correction, Email Classifier, Query Responder (and RAG response validator). Each agent has a clear input/output contract (see below). |
+| **Email Adapter** | SMTP sender (outbound) and IMAP listener (inbound); provider-agnostic, config-driven. |
+| **Persistence** | SQLite for candidates, positions, tickets, model responses, HR notes, feedback emails; file system for uploaded CVs and config. |
+| **RAG Store** | Qdrant: vector ingestion from `knowledge_base/`, similarity search; used by Query Responder and (optionally) feedback context. |
 
-- **Routes (`routes/*.py`)** – main modules include:
-  - `routes/candidates.py` – list, add, view candidate details, trigger feedback flow.
-  - `routes/positions.py` – manage job positions.
-  - `routes/tickets.py` – handle support / IOD tickets.
-  - `routes/admin.py` – admin views: sent emails, model responses, metrics.
-  - `routes/metrics.py` (or equivalent) – returns metrics/health information.
-  - `routes/health.py` – `/health` endpoint for liveness checks.
+### 3.2 Agent contracts (inputs / outputs)
 
-### 3.2 Agents (`agents/`)
+| Agent | Input | Output |
+|-------|--------|--------|
+| **CV Parser Agent** | Raw CV (text or PDF path) | `CVData` (structured) |
+| **Feedback Agent** | `CVData`, HR notes, position/job offer | Draft email HTML |
+| **Validation Agent** | Draft email HTML | `ValidationResult` (approved / issues) |
+| **Correction Agent** | Draft email HTML + validation issues | Corrected email HTML |
+| **Email Classifier Agent** | Inbound email (headers + body) | Label + routing directive (IOD / HR / consent_yes|no / default) |
+| **Query Responder Agent** | Inbound question + optional RAG context | Answer text (optionally validated by RAG response validator) |
 
-- **CV parser agent** – parses uploaded CV (text or PDF) into structured `CVData`.
-- **Feedback agent** – generates HTML feedback email given CV + HR notes + job offer.
-- **Validation agent** – checks feedback for correctness, ethics, formatting, returns `ValidationResult`.
-- **Correction agent** – produces corrected HTML based on rejected feedback + validation issues.
-- **Query classifier agent** – classifies free-form emails/questions (IOD vs general vs consent).
-- **Query responder agent** – answers candidate questions using context (optionally with RAG).
-- **Email classifier agent** – classifies incoming emails for routing (IOD, consent, general).
-- **RAG response validator agent** – validates RAG-generated answers.
+All agents use the **LLM Gateway**; no direct OpenAI/Azure client calls in agent code.
 
-All agents inherit from `BaseAgent` and call the LLM via the **LLM adapter** (`llm/` package), not directly through OpenAI/Azure clients.
-
-### 3.3 Services (`services/`)
-
-- **CV service (`cv_service.py`)**
-  - Orchestrates CV parsing: calls PDF reader, CV parser agent, handles errors (invalid PDF, OCR fallback).
-
-- **Feedback service (`feedback_service.py`)**
-  - Orchestrates the full feedback flow:
-    - calls CV service (if needed),
-    - calls Feedback agent,
-    - optionally runs Validation + Correction loop,
-    - records iterations and results in the database,
-    - hands off email content to the email sender.
-
-- **Email sender (`email_sender.py`)**
-  - Sends HTML emails via SMTP.
-
-- **Email listener/router/monitor (`email_listener.py`, `email_router.py`, `email_monitor.py`)**
-  - **Listener** – connects to IMAP, fetches unread emails, parses headers/body.
-  - **Router** – routes classified email:
-    - forward to IOD,
-    - forward to HR,
-    - answer automatically via Query responder + RAG,
-    - update candidate records or tickets.
-  - **Monitor** – background thread periodically polling IMAP, passing emails through classifier + router.
-
-- **Qdrant service (`qdrant_service.py`)**
-  - Wraps access to Qdrant: create collections, upsert docs, vector search.
-
-- **Metrics service (`metrics_service.py`)**
-  - Aggregates metrics such as validation iterations and LLM calls per agent.
-
-### 3.4 Data stores
-
-- **SQLite database (`database/`)**
-  - Tables for candidates, positions, tickets, model responses, HR notes, feedback emails, validation errors.
-  - Accessed via `database/models.py` (CRUD helpers) and used by services/routes.
-
-- **Qdrant (`knowledge_base/load_to_qdrant.py`)**
-  - Loads `.txt` documents from `knowledge_base/` into Qdrant as vectors.
-
-- **File system**
-  - `uploads/` – uploaded CV PDFs.
-  - `data/` – SQLite DB and runtime data (depending on config/Docker volumes).
-
-### Diagram (PlantUML → image)
+### 3.3 Diagram (PlantUML → image)
 ![C4 L3 - Components (Web App)](diagrams/c4-L3-components-webapp.svg)
 
----
+### Appendix: Code map
 
-## 4. Technical decisions
-
-### 4.1 Flask
-- Lightweight framework:
-  - easy to run locally and in Docker,
-  - minimal dependencies, good for MVP / educational project.
-
-### 4.2 SQLite
-- Single-file database:
-  - no separate DB server required,
-  - sufficient for small/medium datasets and demos.
-
-### 4.3 Qdrant and RAG
-- Qdrant used as a vector store:
-  - documents from `knowledge_base/` are embedded (via embeddings) and stored as vectors,
-  - on query:
-    1. embed the query,
-    2. vector search in Qdrant,
-    3. inject retrieved text into the LLM prompt.
-
-Used mainly for candidate questions about the company, process, policies, and IOD/GDPR-related questions.
-
-### 4.4 State
-- **Persistent state:** SQLite (canonical), Qdrant (vectors), file system (uploads).
-- **Transient state:** in-process caches, temporary Python objects.
-
-No external session store; intentionally simple for the MVP / book use case.
+- **HTTP API + UI:** `app.py`, `routes/candidates.py`, `routes/positions.py`, `routes/tickets.py`, `routes/admin.py`, `routes/health.py`, `templates/`.
+- **Workflow / orchestration:** `services/feedback_service.py`, `services/cv_service.py`; inbound loop in `services/email_monitor.py`, `services/email_router.py`, `services/email_listener.py`.
+- **LLM Gateway:** `llm/base.py`, `llm/azure_openai.py`, `llm/openai_official.py`, `llm/factory.py`; prompts in `prompts/*.py`.
+- **Agents:** `agents/cv_parser_agent.py`, `agents/feedback_agent.py`, `agents/validation_agent.py`, `agents/correction_agent.py`, `agents/email_classifier_agent.py`, `agents/query_classifier_agent.py`, `agents/query_responder_agent.py`, `agents/rag_response_validator_agent.py`.
+- **Email adapter:** `services/email_sender.py`, `services/email_listener.py`.
+- **Persistence:** `database/models.py`, `database/*.py`; SQLite file under `data/` or project root; `uploads/` for CVs.
+- **RAG Store:** `services/qdrant_service.py`, `knowledge_base/load_to_qdrant.py`.
 
 ---
 
-## 5. External dependencies
+## 4. Key constraints and safety
 
-- **LLM providers (Azure OpenAI / OpenAI)** via `llm/` adapter:
-  - CV parsing, feedback generation, validation/correction,
-  - incoming email classification and answering (with/without RAG).
-
-- **SMTP / IMAP mail servers**
-  - Any provider that supports SMTP/IMAP.
-  - Fully config-driven.
-
-- **Qdrant**
-  - Vector DB for RAG.
-  - Runs as embedded/local or Docker service.
+- **Human-in-the-loop:** Outbound feedback email is sent only after an explicit HR action (e.g. “Reject” with “Send feedback”). Auto-reply to inbound emails is optional and can be gated by feature flag or policy.
+- **Fail-closed:** If validation or policy checks fail, the system does not send the email; the flow stops or retries correction until approved or manually overridden.
+- **PII boundaries:** CV text, HR notes and candidate data are sent to the LLM for feedback generation; the design assumes a trusted LLM provider and no masking in this MVP; for production, consider redaction or on-prem models.
+- **Audit trail:** Model prompts and responses (or their hashes) and template versions can be stored (e.g. in `model_responses` and related tables) for traceability and HR compliance.
 
 ---
 
-## 6. Dynamic views (flows)
+## 5. Technical decisions
 
-### 6.1 Recruitment / feedback flow (Mermaid)
+### 5.1 Flask
+- **Why:** Lightweight, easy to run locally and in Docker, minimal dependencies; fits MVP and educational use.
+- **Trade-off:** No built-in async job queue, horizontal scaling, or auth; add them if moving toward production.
+
+### 5.2 SQLite
+- **Why:** Single-file DB, no separate server; sufficient for small/medium datasets and demos.
+- **Trade-off:** Concurrency and scale limits; migrate to PostgreSQL (or similar) for multi-worker or high-load scenarios.
+
+### 5.3 Qdrant and RAG
+- **Why:** Simple vector store; documents from `knowledge_base/` are embedded and stored; on query: embed query → vector search → inject context into LLM prompt. Used for candidate questions (company, process, IOD/GDPR).
+- **Trade-off:** Embedding model and collection design are fixed in this MVP; tune for latency and relevance in production.
+
+### 5.4 State
+- **Persistent:** SQLite (canonical), Qdrant (vectors), file system (uploads). **Transient:** in-process caches. No external session store; intentionally simple for the MVP.
+
+---
+
+## 6. External dependencies
+
+- **LLM providers (Azure OpenAI / OpenAI)** via `llm/` adapter: CV parsing, feedback generation, validation/correction, incoming email classification and answering (with/without RAG).
+- **SMTP / IMAP mail servers:** Any provider supporting SMTP/IMAP; fully config-driven.
+- **Qdrant:** Vector DB for RAG; runs as embedded/local or Docker service.
+
+---
+
+## 7. Dynamic views (flows)
+
+### 7.1 Recruitment / feedback flow (Mermaid)
+
+CV Service calls **CV Parser Agent** for parsing; **Feedback Agent** only generates draft HTML from already-parsed CVData. The **LLM provider** is shown as a participant because all agent steps go through it.
 
 ```mermaid
 sequenceDiagram
     participant HR as HR
-    participant Web as Web App (Flask)
+    participant Web as Web App
     participant CVS as CV Service
+    participant CVP as CV Parser Agent
+    participant LLM as LLM Provider
     participant FBA as Feedback Agent
     participant VAL as Validation Agent
     participant COR as Correction Agent
@@ -207,45 +165,55 @@ sequenceDiagram
 
     HR->>Web: 1. Reject candidate in UI
     Web->>CVS: 2. Process CV (candidate, PDF path)
-    CVS->>FBA: 3. Parse CV via CV parser agent (LLM)
-    FBA-->>CVS: 4. Structured CV data
-    Web->>FBA: 5. Generate feedback (CV + HR notes + job offer)
-    FBA-->>Web: 6. HTML feedback
+    CVS->>CVP: 3. Parse CV (raw text / PDF)
+    CVP->>LLM: 3a. LLM call
+    LLM-->>CVP: 3b. Structured data
+    CVP-->>CVS: 4. CVData
+    Web->>FBA: 5. Generate feedback (CVData, HR notes, job offer)
+    FBA->>LLM: 5a. LLM call
+    LLM-->>FBA: 5b. Draft HTML
+    FBA-->>Web: 6. Draft email HTML
     Web->>VAL: 7. Validate feedback email
-    VAL-->>Web: 8. ValidationResult (approved / issues)
+    VAL->>LLM: 7a. LLM call
+    LLM-->>VAL: 7b. Result
+    VAL-->>Web: 8. ValidationResult
     alt approved
-        Web->>SMT: 9. Send email (HTML)
-        SMT-->>HR: 10. Delivery / log visible in UI
+        Web->>SMT: 9. Send email
+        SMT-->>HR: 10. Delivery / log in UI
     else rejected
-        Web->>COR: 9a. Correct feedback based on ValidationResult
+        Web->>COR: 9a. Correct (draft + issues)
+        COR->>LLM: 9b. LLM call
+        LLM-->>COR: 9c. Corrected HTML
         COR-->>Web: 10a. Corrected HTML
-        Web->>SMT: 11a. Send corrected email
-        SMT-->>HR: 12a. Delivery / log visible in UI
+        Web->>SMT: 11a. Send email
+        SMT-->>HR: 12a. Delivery / log in UI
     end
 ```
 
-### 6.2 Incoming email handling flow (Mermaid)
+### 7.2 Incoming email handling flow (Mermaid)
+
+**Policy check** happens before auto-reply: the router decides IOD / HR / auto-reply only after classification; auto-reply is the path where policy allows answering without human review.
+
 ```mermaid
 flowchart TB
     subgraph Monitor[Email monitor]
         EMon[EmailMonitor]
         EListen[EmailListener]
-        ERouter[EmailRouter]
         EClass[EmailClassifierAgent]
+        Policy[Policy / routing decision]
+        ERouter[EmailRouter]
         QR[QueryResponderAgent]
-        RAG[QdrantRAG service]
+        RAG[QdrantRAG]
         Mail[IMAP mailbox] --> EListen
         EListen --> EMon
         EMon --> EClass
-        EClass --> ERouter
-
+        EClass --> Policy
+        Policy --> ERouter
         ERouter --> IODBox[IOD_EMAIL]
         ERouter --> HRBox[HR_EMAIL]
-
-        ERouter --> QR
+        Policy -->|if auto-reply allowed| QR
         QR --> RAG
         RAG --> QR
-        QR --> ERouter
-        ERouter --> MailOut[SMTP server]
+        QR --> MailOut[SMTP server]
     end
 ```

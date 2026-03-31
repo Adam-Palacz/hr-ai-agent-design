@@ -1,0 +1,26 @@
+@startuml C4_L2_Containers
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+Person(hr, "HR user", "Uses the web UI.")
+Person(candidate, "Candidate", "Receives and replies to emails.")
+
+System_Boundary(system, "Recruitment AI system") {
+    Container(web, "Flask Web App", "Python / Flask", "HTTP API + UI, orchestration, agents.")
+    ContainerDb(db, "SQLite database", "SQLite file", "Candidates, positions, tickets, model responses, emails, notes.")
+}
+
+Container_Ext(llm, "LLM provider", "Azure OpenAI / OpenAI", "Chat-completion style LLM.")
+Container_Ext(mail, "Mail server", "SMTP/IMAP", "Outbound and inbound email.")
+Container_Ext(qdrant, "Qdrant", "Vector DB", "RAG knowledge base with embedded documents.")
+
+Rel(hr, web, "Uses via browser (HTTP)")
+Rel(candidate, mail, "Sends/receives email")
+
+Rel(web, db, "Reads/writes application data")
+Rel(web, llm, "LLM calls via adapter (agents)")
+Rel(web, mail, "Sends feedback emails; polls IMAP")
+Rel(web, qdrant, "Loads documents and performs vector search for RAG")
+
+SHOW_LEGEND()
+
+@enduml
