@@ -2,8 +2,16 @@
 
 Web application for HR teams to manage recruitment: review CVs, track candidates through stages, and send AI-generated feedback emails. Includes optional email monitoring (IMAP) with automatic routing and RAG-based answers to candidate inquiries.
 
+## Companion publication
+
+**PL:** To repozytorium jest **materiałem technicznym** (architektura i kod źródłowy) do **case study** omawianego w części technicznej książki Wydawnictwa Difin: *Gotowy plan wdrożenia systemu AI w MŚP. Praktyczna dokumentacja prawna, informatyczna i ocena biznesowa projektu* (ISBN **978-83-8270-509-6**, 2026; autorzy: Damian Dziuba, Joanna Guzik-Jankowska, Adam Palacz, Magdalena Wolańska). Publikacja prowadzi przez wdrożenie AI w MŚP (m.in. regulacje, dokumentacja, biznes); **tu** znajduje się implementacja referencyjna agenta HR — **nie zastępuje** treści merytorycznej książki.
+
+**EN:** This repository is the **technical companion** for the case study in the Difin book *Gotowy plan wdrożenia systemu AI w MŚP…* (ISBN **978-83-8270-509-6**, 2026). The book covers legal, organisational, and business aspects of AI adoption in SMEs; **this repo** provides architecture diagrams and source code for readers who want to inspect a reference implementation — it is **not** a substitute for the book.
+
 ## Documentation
 
+- **Online docs (GitHub Pages):**
+  - https://adamp.github.io/BOOK/
 - **High‑level overview (non‑technical):**
   - Polish: `docs/OVERVIEW_PL.md`
   - English: `docs/OVERVIEW_EN.md`
@@ -219,19 +227,24 @@ BOOK/
 │   ├── settings.py        # Pydantic settings from .env
 │   └── job_config.py      # Job/position config
 ├── agents/
+│   ├── base_agent.py
 │   ├── cv_parser_agent.py
 │   ├── feedback_agent.py
 │   ├── validation_agent.py
 │   ├── correction_agent.py
+│   ├── email_classifier_agent.py
 │   ├── query_classifier_agent.py
-│   └── query_responder_agent.py
+│   ├── query_responder_agent.py
+│   └── rag_response_validator_agent.py
 ├── services/
 │   ├── cv_service.py
 │   ├── feedback_service.py
 │   ├── qdrant_service.py
+│   ├── email_sender.py
 │   ├── email_monitor.py
 │   ├── email_router.py
-│   └── email_listener.py
+│   ├── email_listener.py
+│   └── metrics_service.py
 ├── database/
 │   ├── models.py          # SQLite schema, CRUD
 │   └── seed_data.py

@@ -23,15 +23,21 @@ nav:
       - Agents & Services: api.md
 
 plugins:
+  - search
   - mkdocstrings:
       default_handler: python
+  - mermaid2
 
 markdown_extensions:
   - admonition
   - toc:
       permalink: true
   - pymdownx.highlight
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid_custom
 
 theme:
   name: material

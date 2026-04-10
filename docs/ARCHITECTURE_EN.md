@@ -76,7 +76,7 @@ This section describes the main **architectural layers** inside the Flask web ap
 | **HTTP API + UI** | Flask routes and templates; exposes candidate/position/ticket CRUD, process (reject/accept), admin, health. |
 | **Workflow Orchestrator** | Runs the feedback loop (CV → parse → draft → validate → correct → send) and the inbound-email loop (fetch → classify → route / reply). |
 | **LLM Gateway / Adapter** | Single entry point to Azure OpenAI or OpenAI; retries, timeouts, logging; prompt templates live in `prompts/`. Agents call through this layer only. |
-| **Agent Runtime** | CV Parser, Feedback, Validation, Correction, Email Classifier, Query Responder (and RAG response validator). Each agent has a clear input/output contract (see below). |
+| **Agent Runtime** | CV Parser, Feedback, Validation, Correction, Email Classifier, Query Classifier, Query Responder (and RAG response validator). Each agent has a clear input/output contract (see below). |
 | **Email Adapter** | SMTP sender (outbound) and IMAP listener (inbound); provider-agnostic, config-driven. |
 | **Persistence** | SQLite for candidates, positions, tickets, model responses, HR notes, feedback emails; file system for uploaded CVs and config. |
 | **RAG Store** | Qdrant: vector ingestion from `knowledge_base/`, similarity search; used by Query Responder and (optionally) feedback context. |
@@ -90,6 +90,7 @@ This section describes the main **architectural layers** inside the Flask web ap
 | **Validation Agent** | Draft email HTML | `ValidationResult` (approved / issues) |
 | **Correction Agent** | Draft email HTML + validation issues | Corrected email HTML |
 | **Email Classifier Agent** | Inbound email (headers + body) | Label + routing directive (IOD / HR / consent_yes|no / default) |
+| **Query Classifier Agent** | Classified inquiry (email content / thread) | Response strategy (`direct_answer` / `rag_answer` / `forward_to_hr`) |
 | **Query Responder Agent** | Inbound question + optional RAG context | Answer text (optionally validated by RAG response validator) |
 
 All agents use the **LLM Gateway**; no direct OpenAI/Azure client calls in agent code.
@@ -99,8 +100,8 @@ All agents use the **LLM Gateway**; no direct OpenAI/Azure client calls in agent
 
 ### Appendix: Code map
 
-- **HTTP API + UI:** `app.py`, `routes/candidates.py`, `routes/positions.py`, `routes/tickets.py`, `routes/admin.py`, `routes/health.py`, `templates/`.
-- **Workflow / orchestration:** `services/feedback_service.py`, `services/cv_service.py`; inbound loop in `services/email_monitor.py`, `services/email_router.py`, `services/email_listener.py`.
+- **HTTP API + UI:** `app.py`, `routes/candidates.py`, `routes/positions.py`, `routes/tickets.py`, `routes/process.py`, `routes/admin.py`, `routes/health.py`, `templates/`.
+- **Workflow / orchestration:** `services/feedback_service.py`, `services/cv_service.py`; inbound loop in `services/email_monitor.py`, `services/email_router.py`, `services/email_listener.py`; admin metrics in `services/metrics_service.py`.
 - **LLM Gateway:** `llm/base.py`, `llm/azure_openai.py`, `llm/openai_official.py`, `llm/factory.py`; prompts in `prompts/*.py`.
 - **Agents:** `agents/cv_parser_agent.py`, `agents/feedback_agent.py`, `agents/validation_agent.py`, `agents/correction_agent.py`, `agents/email_classifier_agent.py`, `agents/query_classifier_agent.py`, `agents/query_responder_agent.py`, `agents/rag_response_validator_agent.py`.
 - **Email adapter:** `services/email_sender.py`, `services/email_listener.py`.
