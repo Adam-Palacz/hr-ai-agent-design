@@ -11,7 +11,7 @@ Web application for HR teams to manage recruitment: review CVs, track candidates
 ## Documentation
 
 - **Online docs (GitHub Pages):**
-  - https://adamp.github.io/BOOK/
+  - https://adam-palacz.github.io/hr-ai-agent-design/
 - **High‑level overview (non‑technical):**
   - Polish: `docs/OVERVIEW_PL.md`
   - English: `docs/OVERVIEW_EN.md`
