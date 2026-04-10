@@ -1,5 +1,5 @@
 # Multi-stage build for smaller image size
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 # Install system dependencies for building
 # Retry logic for network issues (Debian repos can be temporarily unavailable)
