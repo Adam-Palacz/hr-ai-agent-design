@@ -203,6 +203,7 @@ flowchart TB
     subgraph Monitor[Email monitor]
         EMon[EmailMonitor]
         EListen[EmailListener]
+        KGate[Bramka słów kluczowych IOD]
         EClass[EmailClassifierAgent]
         Policy[Policy / routing decision]
         ERouter[EmailRouter]
@@ -210,7 +211,9 @@ flowchart TB
         RAG[QdrantRAG]
         Mail[IMAP mailbox] --> EListen
         EListen --> EMon
-        EMon --> EClass
+        EMon --> KGate
+        KGate -->|trafienie IOD| Policy
+        KGate -->|brak słowa kluczowego IOD| EClass
         EClass --> Policy
         Policy --> ERouter
         ERouter --> IODBox[IOD_EMAIL]

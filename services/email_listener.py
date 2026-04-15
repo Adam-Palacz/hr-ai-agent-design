@@ -347,68 +347,88 @@ class EmailListener:
             logger.error(f"Error marking email as read: {str(e)}")
             return False
 
-    def classify_email(self, email_data: Dict, classifier_agent=None) -> str:
-        """
-        Classify email into categories using AI agent.
+    # Subset used for fast IOD keyword path (keep aligned with EmailClassifierAgent.CRITICAL_IOD_KEYWORDS)
+    _CRITICAL_IOD_KEYWORDS_FAST_PATH = [
+        "rodo",
+        "iod",
+        "dpo",
+        "gdpr",
+        "dane osobowe",
+        "ochrona danych",
+        "uodo",
+        "organ nadzorczy",
+        "profilowanie",
+        "automatyczna decyzja",
+    ]
 
-        Args:
-            email_data: Email dictionary with 'subject' and 'body' keys
-            classifier_agent: Optional EmailClassifierAgent instance (if None, uses simple keyword matching)
+    def _classify_iod_by_keywords(self, email_data: Dict) -> str:
+        """
+        Fast, deterministic IOD detection from subject + body (no LLM).
 
         Returns:
-            Classification: 'iod', 'consent_yes', 'consent_no', or 'default'
+            'iod' if a critical IOD keyword is found, otherwise 'default'.
         """
-        # If AI classifier is available, use it
+        text = f"{email_data.get('subject', '')} {email_data.get('body', '')}".lower()
+
+        found_iod_keywords = [
+            kw for kw in self._CRITICAL_IOD_KEYWORDS_FAST_PATH if kw.lower() in text
+        ]
+        if len(found_iod_keywords) >= 1:
+            logger.info(f"Email classified as IOD (keyword fast path: {found_iod_keywords})")
+            return "iod"
+
+        return "default"
+
+    def classify_email(self, email_data: Dict, classifier_agent=None) -> str:
+        """
+        Classify incoming email.
+
+        Order:
+        1. **Keyword fast path** — detect only explicit IOD terms.
+        2. If still ``default`` and ``classifier_agent`` is set — **LLM full classification**
+           over all classes: ``iod`` / ``consent_yes`` / ``consent_no`` / ``default``.
+        3. If no agent or LLM fails — fallback to legacy consent keyword matching, otherwise ``default``.
+
+        Args:
+            email_data: Email dict with 'subject', 'body', 'from_email', etc.
+            classifier_agent: Optional EmailClassifierAgent.
+
+        Returns:
+            'iod', 'consent_yes', 'consent_no', or 'default'
+        """
+        fast = self._classify_iod_by_keywords(email_data)
+        if fast != "default":
+            return fast
+
         if classifier_agent:
             try:
                 classification = classifier_agent.classify_email(
                     from_email=email_data.get("from_email", ""),
                     subject=email_data.get("subject", ""),
                     body=email_data.get("body", ""),
+                    apply_iod_keyword_gate=False,
                 )
                 logger.info(
-                    f"Email classified by AI as '{classification.category}' "
+                    f"Email classified by LLM (after keyword default) as '{classification.category}' "
                     f"(confidence: {classification.confidence:.2f})"
                 )
                 return classification.category
             except Exception as e:
                 logger.warning(
-                    f"AI classification failed, falling back to keyword matching: {str(e)}"
+                    f"LLM classification failed after keyword fast path returned default: {str(e)}"
                 )
 
-        # Fallback to simple keyword matching
+        # Legacy fallback when LLM is unavailable/failing: consent keywords only
         text = f"{email_data.get('subject', '')} {email_data.get('body', '')}".lower()
-
-        # Check for IOD keywords (at least 1 critical one required)
-        critical_iod_keywords = [
-            "rodo",
-            "iod",
-            "dpo",
-            "gdpr",
-            "dane osobowe",
-            "ochrona danych",
-            "uodo",
-            "organ nadzorczy",
-            "profilowanie",
-            "automatyczna decyzja",
-        ]
-        found_iod_keywords = [kw for kw in critical_iod_keywords if kw.lower() in text]
-
-        if len(found_iod_keywords) >= 1:
-            logger.info(f"Email classified as IOD (keywords: {found_iod_keywords})")
-            return "iod"
-
-        # Check for consent keywords
         for keyword in self.CONSENT_KEYWORDS_POSITIVE:
             if keyword.lower() in text:
-                logger.info(f"Email classified as consent_yes (keyword: {keyword})")
+                logger.info(f"Email classified as consent_yes (fallback keyword: {keyword})")
                 return "consent_yes"
 
         for keyword in self.CONSENT_KEYWORDS_NEGATIVE:
             if keyword.lower() in text:
-                logger.info(f"Email classified as consent_no (keyword: {keyword})")
+                logger.info(f"Email classified as consent_no (fallback keyword: {keyword})")
                 return "consent_no"
 
-        # Default classification
-        logger.info("Email classified as default (HR)")
+        logger.info("Email classified as default (HR) — no IOD keyword match and no LLM result")
         return "default"

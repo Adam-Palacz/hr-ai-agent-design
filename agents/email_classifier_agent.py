@@ -28,7 +28,23 @@ class EmailClassification(BaseModel):
 class EmailClassifierAgent(BaseAgent):
     """AI agent for classifying incoming emails."""
 
-    # Critical IOD keywords - at least a few of these must be present for IOD classification
+    # If the model returns IOD but no literal critical keyword matches, still accept IOD when
+    # confidence is at least this threshold (semantic / paraphrased requests without "RODO" etc.).
+    IOD_SEMANTIC_MIN_CONFIDENCE: float = 0.85
+
+    # Substrings in subject/body that reinforce IOD without being the full critical list (optional signal)
+    EXTENDED_IOD_HINTS = [
+        "prawo dostępu",
+        "prawo do usunięcia",
+        "bycia zapomnianym",
+        "kopii danych",
+        "kopię przetwarzania",
+        "inspektor danych",
+        "wycofuję zgodę na przetwarzanie",
+        "żądanie usunięcia",
+    ]
+
+    # Critical IOD keywords - presence supports IOD; absence no longer alone overrides a high-confidence model IOD
     CRITICAL_IOD_KEYWORDS = [
         "rodo",
         "iod",
@@ -107,7 +123,8 @@ Your task is to classify incoming emails from candidates into one of the followi
    - Regular questions, follow-ups, general inquiries, etc.
 
 CRITICAL RULES:
-- For IOD classification: The email MUST contain at least 2-3 of the critical IOD keywords listed above
+- For IOD classification: use category "iod" when the message is clearly about data protection / privacy rights / requests to the data controller or DPO — either because it uses the usual terms (RODO, dane osobowe, etc.) OR because it clearly paraphrases those rights (e.g. request to delete personal data, access copy, objection to processing) even without those exact words
+- Prefer "iod" when the intent is regulatory/privacy; do not require a fixed keyword count if the meaning is unambiguous
 - If an email mentions "zgoda" but in context of consent for other positions (not data protection), classify as consent_yes/consent_no, NOT IOD
 - If an email mentions "AI" or "sztuczna inteligencja" but in context of job requirements or skills, classify as default, NOT IOD
 - Be precise - only classify as IOD if it's clearly about data protection/privacy rights
@@ -141,7 +158,14 @@ DO NOT return:
 }}
 """
 
-    def classify_email(self, from_email: str, subject: str, body: str) -> EmailClassification:
+    def classify_email(
+        self,
+        from_email: str,
+        subject: str,
+        body: str,
+        *,
+        apply_iod_keyword_gate: bool = True,
+    ) -> EmailClassification:
         """
         Classify email using AI.
 
@@ -149,6 +173,8 @@ DO NOT return:
             from_email: Sender's email address
             subject: Email subject
             body: Email body text
+            apply_iod_keyword_gate: If False, accept model ``iod`` without requiring literal
+                keyword/hint substrings (use after a keyword fast-path already returned ``default``).
 
         Returns:
             EmailClassification object
@@ -180,8 +206,8 @@ DO NOT return:
             # Parse response
             classification = self._parse_classification_from_text(result_text or "")
 
-            # Validate IOD classification - must have at least ONE critical keyword
-            if classification.category == "iod":
+            # Optional guard: when LLM runs alone (not after keyword fast-path), reduce false IOD
+            if apply_iod_keyword_gate and classification.category == "iod":
                 body_lower = body.lower()
                 subject_lower = subject.lower()
                 text_lower = f"{subject_lower} {body_lower}"
@@ -191,20 +217,30 @@ DO NOT return:
                     for keyword in self.CRITICAL_IOD_KEYWORDS
                     if keyword.lower() in text_lower
                 ]
+                found_hints = [h for h in self.EXTENDED_IOD_HINTS if h.lower() in text_lower]
 
-                # Require at least ONE strong IOD keyword in the actual email text
-                if len(found_keywords) < 1:
+                has_literal_signal = len(found_keywords) >= 1 or len(found_hints) >= 1
+                high_confidence_semantic = (
+                    classification.confidence >= self.IOD_SEMANTIC_MIN_CONFIDENCE
+                )
+
+                if not has_literal_signal and not high_confidence_semantic:
                     logger.warning(
-                        "IOD classification rejected - no critical IOD keywords found in email text. "
+                        "IOD classification rejected - no critical IOD keywords/hints in text and "
+                        f"model confidence {classification.confidence:.2f} < {self.IOD_SEMANTIC_MIN_CONFIDENCE}. "
                         "Reclassifying as 'default'."
                     )
-                    # Reclassify as default
                     classification.category = "default"
                     classification.reasoning = (
-                        "Originally classified as IOD by the model, but no critical IOD keywords were found "
-                        "in the email subject/body. Reclassified as default (HR)."
+                        "Originally classified as IOD by the model, but no IOD keyword/hint substring was found "
+                        f"and confidence was below {self.IOD_SEMANTIC_MIN_CONFIDENCE}. Reclassified as default (HR)."
                     )
-                    classification.confidence = 0.7
+                    classification.confidence = min(classification.confidence, 0.7)
+                elif not has_literal_signal and high_confidence_semantic:
+                    logger.info(
+                        "IOD kept on high model confidence despite no literal critical IOD keywords "
+                        f"(confidence={classification.confidence:.2f})."
+                    )
 
             logger.info(
                 f"Email classified as '{classification.category}' "
