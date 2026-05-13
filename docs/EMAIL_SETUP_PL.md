@@ -6,6 +6,27 @@ Konfiguracja odbywa się przez zmienne środowiskowe w pliku `.env`.
 
 Zawsze używaj **hasła aplikacji / app password**, jeśli dostawca tego wymaga
 (np. Gmail, Zoho), a nie głównego hasła do konta.
+Jeśli Twój dostawca nie używa haseł aplikacji, stosuj metodę logowania opisaną
+w jego oficjalnej dokumentacji.
+
+## Oficjalne źródła (SMTP/IMAP + hasła aplikacji)
+
+- **Gmail – SMTP/IMAP (ustawienia i wymagania):**
+  - Google Workspace Admin Help: <https://support.google.com/a/answer/9003945?hl=pl>
+  - Gmail Developers (IMAP/SMTP): <https://developers.google.com/gmail/imap/imap-smtp>
+- **Gmail – hasła aplikacji (App Passwords):**
+  - Gmail Help: <https://support.google.com/mail/answer/185833?hl=pl>
+
+- **Zoho Mail – SMTP/IMAP:**
+  - Zoho Mail Help: <https://www.zoho.com/mail/help/imap-access.html>
+- **Zoho Mail – hasła aplikacji:**
+  - Zoho Accounts (App Passwords): <https://accounts.zoho.com/home#security/app_passwords>
+
+- **Microsoft 365 / Exchange Online – SMTP AUTH (oficjalnie):**
+  - Microsoft Learn: <https://learn.microsoft.com/exchange/clients-and-mobile-in-exchange-online/authenticated-client-smtp-submission>
+
+> Uwaga dla Microsoft 365: klasyczne IMAP/SMTP z loginem i hasłem bywa ograniczane
+> politykami tenantu; Microsoft zaleca OAuth tam, gdzie to możliwe.
 
 ## 1. Zmienne środowiskowe
 
@@ -68,10 +89,13 @@ Zoho znajdziesz instrukcje pod hasłami „app password” lub „SMTP/IMAP acce
 
 ## 3. Gmail
 
-Gmail wymaga:
+Dla użytkowników Gmail: wymagane jest:
 
-- włączonego 2FA na koncie Google,
-- wygenerowania **hasła aplikacji** w ustawieniach bezpieczeństwa konta.
+- włączone 2FA na koncie Google,
+- wygenerowanie **hasła aplikacji** w ustawieniach bezpieczeństwa konta.
+
+Dla innych dostawców (Zoho, Microsoft 365, własny serwer SMTP/IMAP)
+obowiązują zasady z dokumentacji danego dostawcy.
 
 **SMTP (wysyłanie)**:
 

@@ -6,6 +6,27 @@ via environment variables in `.env`.
 
 Always use an **app password / application-specific password** when your provider
 requires it (e.g. Gmail, Zoho), not your main account password.
+If your provider does not use app passwords, follow that provider’s official
+authentication guidance.
+
+## Official sources (SMTP/IMAP + app passwords)
+
+- **Gmail – SMTP/IMAP:**
+  - Google Workspace Admin Help: <https://support.google.com/a/answer/9003945>
+  - Gmail Developers (IMAP/SMTP): <https://developers.google.com/gmail/imap/imap-smtp>
+- **Gmail – App Passwords:**
+  - Gmail Help: <https://support.google.com/mail/answer/185833>
+
+- **Zoho Mail – SMTP/IMAP:**
+  - Zoho Mail Help: <https://www.zoho.com/mail/help/imap-access.html>
+- **Zoho Mail – app passwords:**
+  - Zoho Accounts: <https://accounts.zoho.com/home#security/app_passwords>
+
+- **Microsoft 365 / Exchange Online – SMTP AUTH:**
+  - Microsoft Learn: <https://learn.microsoft.com/exchange/clients-and-mobile-in-exchange-online/authenticated-client-smtp-submission>
+
+> Note for Microsoft 365: classic IMAP/SMTP username+password may be restricted by
+> tenant policies; OAuth is recommended where possible.
 
 ## 1. Environment variables
 
@@ -68,10 +89,13 @@ documentation for “app passwords” or “SMTP/IMAP access” to generate one.
 
 ## 3. Gmail
 
-Gmail requires:
+For Gmail users, required:
 
 - 2FA enabled on your Google Account.
 - **App password** created in Google Account security.
+
+For non-Gmail providers (Zoho, Microsoft 365, custom SMTP/IMAP),
+follow the authentication policy in the provider documentation.
 
 **SMTP (sending)**:
 

@@ -15,16 +15,39 @@ for the first time.
   ```
 
 - **Git** – to clone the repository.
-- **Azure account with Azure OpenAI** – you need:
-  - the endpoint URL (e.g. `https://...openai.azure.com`),
-  - an API key,
-  - deployment names for the GPT model and the embedding model.
+- **LLM account (choose one):**
+  - **Azure OpenAI**: endpoint URL, API key, GPT/embedding deployment names,
+  - **or OpenAI API**: API key (`OPENAI_API_KEY`) and model name (`OPENAI_CHAT_MODEL`).
 - **(Optional) Email account with SMTP/IMAP** – e.g. Zoho, Gmail:
   - SMTP/IMAP login and password (often an app password),
   - SMTP/IMAP host and port (e.g. `smtp.zoho.eu:587`, `imap.zoho.eu:993`).
 
 > You do **not** need email configured to start;
 > the app will still run, but sending/monitoring emails will be disabled.
+
+### Where to get API keys and model settings?
+
+- **Azure OpenAI:**
+  1. Open Azure AI Foundry / Azure Portal and select your Azure OpenAI resource.
+  2. Copy the **endpoint** and **API key**.
+  3. Check deployment names (chat + embedding) and set
+     `AZURE_OPENAI_GPT_DEPLOYMENT` and `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`.
+- **OpenAI API:**
+  1. Open OpenAI platform and create an **API key**.
+  2. Put it in `.env` as `OPENAI_API_KEY`.
+  3. Set `OPENAI_CHAT_MODEL` and `LLM_PROVIDER=openai`.
+
+### Official sources / docs
+
+- OpenAI API docs overview: <https://platform.openai.com/docs/overview>
+- OpenAI API keys: <https://platform.openai.com/api-keys>
+- Azure OpenAI docs (Microsoft Learn): <https://learn.microsoft.com/azure/ai-services/openai/>
+- Azure AI Foundry portal: <https://ai.azure.com/>
+
+- Gmail SMTP/IMAP: <https://support.google.com/a/answer/9003945>
+- Gmail App Passwords: <https://support.google.com/mail/answer/185833>
+- Zoho SMTP/IMAP: <https://www.zoho.com/mail/help/imap-access.html>
+- Microsoft 365 SMTP AUTH: <https://learn.microsoft.com/exchange/clients-and-mobile-in-exchange-online/authenticated-client-smtp-submission>
 
 ### Installing Python and Git (short version)
 
@@ -42,7 +65,7 @@ for the first time.
 
 ```bash
 git clone <REPO_URL>
-cd BOOK
+cd hr-ai-agent-design
 
 python -m venv venv
 
@@ -68,14 +91,29 @@ Copy the example file and fill in values:
 cp .env.example .env
 ```
 
-**Minimum required** for AI to work:
+The app supports **two LLM providers**:
+
+1. **Azure OpenAI** (`LLM_PROVIDER=azure`, default)
+2. **OpenAI API** (`LLM_PROVIDER=openai`)
+
+### Option A: Azure OpenAI (default)
 
 | Variable                          | Description                                      |
 |-----------------------------------|--------------------------------------------------|
+| `LLM_PROVIDER`                    | `azure`                                          |
 | `AZURE_OPENAI_API_KEY`           | Azure OpenAI API key                             |
 | `AZURE_OPENAI_ENDPOINT`          | Azure OpenAI endpoint URL                        |
 | `AZURE_OPENAI_GPT_DEPLOYMENT`    | GPT deployment name (e.g. `gpt-4.1-nano`)        |
 | `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | Embedding deployment (e.g. `text-embedding-3-small`) |
+
+### Option B: OpenAI API
+
+| Variable           | Description                                        |
+|--------------------|----------------------------------------------------|
+| `LLM_PROVIDER`     | `openai`                                           |
+| `OPENAI_API_KEY`   | OpenAI API key                                     |
+| `OPENAI_CHAT_MODEL`| Chat model name (e.g. `gpt-4.1-nano`)             |
+| `OPENAI_BASE_URL`  | Optional, default `https://api.openai.com/v1`     |
 
 **Optional – email sending and monitoring:**
 
@@ -85,8 +123,11 @@ cp .env.example .env
 - `EMAIL_MONITOR_ENABLED`
 - `IOD_EMAIL`, `HR_EMAIL`, `EMAIL_CHECK_INTERVAL`
 
-> Recommended: start with Azure OpenAI only, then configure email
+> Recommended: start with one LLM provider only (Azure or OpenAI), then configure email
 > once the basic app works.
+
+For full mailbox setup (Zoho/Gmail/Office 365), see:
+- [Email setup (SMTP/IMAP)](EMAIL_SETUP_EN.md)
 
 ---
 
@@ -121,7 +162,7 @@ example data.
    - choose “Rejected”.
 6. The system will:
    - parse the CV,
-   - generate feedback using Azure OpenAI,
+   - generate feedback using the selected LLM provider (Azure OpenAI or OpenAI API),
    - validate and optionally correct the email,
    - prepare the email to be sent.
 
