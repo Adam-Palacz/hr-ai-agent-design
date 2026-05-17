@@ -3,6 +3,9 @@
 Ten przewodnik prowadzi krok po kroku osobę,
 która **nigdy wcześniej nie uruchamiała tego projektu**.
 
+> **Nietechniczny start (~30 min, bez poczty i Dockera):**
+> [Pierwsze uruchomienie – przewodnik nietechniczny](QUICKSTART_NONTECH_PL.md)
+
 ---
 
 ## 1. Wymagania wstępne
@@ -16,14 +19,21 @@ która **nigdy wcześniej nie uruchamiała tego projektu**.
 
 - **Git** – do sklonowania repozytorium.
 - **Konto LLM (wybierz jedno):**
-  - **Azure OpenAI**: endpoint, klucz API, nazwy deploymentów GPT/embedding,
-  - **albo OpenAI API**: klucz API (`OPENAI_API_KEY`) i nazwa modelu (`OPENAI_CHAT_MODEL`).
-- **(Opcjonalnie) konto e‑mail ze wsparciem SMTP/IMAP** – np. Zoho, Gmail:
-  - SMTP/IMAP login i hasło (często tzw. „app password”),
-  - host i port SMTP/IMAP (np. `smtp.zoho.eu:587`, `imap.zoho.eu:993`).
+  - **OpenAI API**: najprostsze do demo lokalnego; klucz API (`OPENAI_API_KEY`) i nazwa modelu (`OPENAI_CHAT_MODEL`),
+  - **Azure OpenAI**: zalecane dla produkcji; endpoint, klucz API, nazwy deploymentów GPT/embedding w wybranym regionie Azure, najlepiej w UE.
+- **(Opcjonalnie) poczta ze SMTP + IMAP** – patrz [Konfiguracja e‑mail](EMAIL_SETUP_PL.md):
+  - **SMTP** = wysyłka; **IMAP** = odczyt monitorowanej skrzynki.
+  - Do demo potrzebujesz **co najmniej trzech różnych adresów** (bot, HR, IOD).
+  - **Nigdy** nie ustawiaj `HR_EMAIL` ani `IOD_EMAIL` na ten sam adres co `EMAIL_USERNAME`
+    (ryzyko nieskończonej pętli). W przykładach jest Zoho, bo łatwo założyć kilka skrzynek
+    w jednej domenie; możesz użyć dowolnego dostawcy z wieloma skrzynkami.
 
-> Nie musisz konfigurować e‑maili na start – aplikacja nadal się uruchomi,
-> ale wysyłka maili i monitorowanie skrzynki będą nieaktywne.
+> **Poczta a sens aplikacji:** główny scenariusz to **wysłanie spersonalizowanego
+> feedbacku mailem do kandydata** — do tego potrzebujesz SMTP (`EMAIL_USERNAME`,
+> `EMAIL_PASSWORD`, hosty). Bez poczty aplikacja **się uruchomi** i **wygeneruje**
+> treść feedbacku (AI), ale **nie dostarczy** jej kandydatowi — zobaczysz ją tylko
+> w panelu (np. administracja). Ten przewodnik techniczny zakłada pełną konfigurację;
+> sam test UI/AI bez wysyłki: [przewodnik nietechniczny](QUICKSTART_NONTECH_PL.md).
 
 ### Skąd wziąć klucze API i dane do modeli?
 
@@ -35,21 +45,26 @@ która **nigdy wcześniej nie uruchamiała tego projektu**.
 - **OpenAI API:**
   1. Wejdź na platformę OpenAI i wygeneruj **API key**.
   2. Wpisz go do `.env` jako `OPENAI_API_KEY`.
-  3. Ustaw `OPENAI_CHAT_MODEL` (np. `gpt-4.1-nano`) i `LLM_PROVIDER=openai`.
+  3. Ustaw `OPENAI_CHAT_MODEL` (np. `gpt-4o-mini`) i `LLM_PROVIDER=openai`.
 
-> Jeśli nie masz pewności, który wariant wybrać: zacznij od Azure (domyślny),
-> a później przetestuj OpenAI zmieniając tylko `LLM_PROVIDER` i zmienne `OPENAI_*`.
+> Jeśli robisz lokalne demo, zacznij od OpenAI API (`LLM_PROVIDER=openai`).
+> Jeśli planujesz pracę z prawdziwymi danymi kandydatów, użyj Azure OpenAI
+> w regionie UE ze względu na kontrolę lokalizacji przetwarzania danych.
 
 ### Oficjalne źródła / dokumentacja
 
-- OpenAI API – przegląd platformy i dokumentacja: <https://platform.openai.com/docs/overview>
-- OpenAI API keys: <https://platform.openai.com/api-keys>
-- Azure OpenAI Service – dokumentacja Microsoft Learn: <https://learn.microsoft.com/azure/ai-services/openai/>
-- Azure AI Foundry – portal: <https://ai.azure.com/>
+**LLM (co konfigurujesz):**
 
-- Gmail SMTP/IMAP (oficjalna pomoc Google): <https://support.google.com/mail/answer/7126229>
-- Zoho Mail IMAP/SMTP (oficjalna dokumentacja): <https://www.zoho.com/mail/help/imap-access.html>
-- Microsoft 365 SMTP AUTH / IMAP (Microsoft Learn): <https://learn.microsoft.com/exchange/clients-and-mobile-in-exchange-online/authenticated-client-smtp-submission>
+- [Przegląd platformy OpenAI](https://platform.openai.com/docs/overview) — czym jest API,
+  modele i rozliczenia.
+- [Klucze API OpenAI](https://platform.openai.com/api-keys) — sekret do `OPENAI_API_KEY`
+  (jak hasło; nie commituj go do repozytorium).
+- [Azure OpenAI – Microsoft Learn](https://learn.microsoft.com/azure/ai-services/openai/) —
+  zasoby, deploymenty i limity dla zmiennych `AZURE_OPENAI_*`.
+- [Azure AI Foundry](https://ai.azure.com/) — portal: endpoint, klucz, nazwy deploymentów.
+
+**Poczta (tylko przy włączonym monitorze):** pełna instrukcja w
+[Konfiguracja e‑mail (SMTP/IMAP)](EMAIL_SETUP_PL.md) — SMTP/IMAP, osobne skrzynki, Zoho/Gmail.
 
 ### Jak zainstalować Python i Git (skrótowo)
 
@@ -95,45 +110,52 @@ cp .env.example .env
 
 Aplikacja obsługuje **dwa providery LLM**:
 
-1. **Azure OpenAI** (`LLM_PROVIDER=azure`, domyślnie)
-2. **OpenAI API** (`LLM_PROVIDER=openai`)
+1. **OpenAI API** (`LLM_PROVIDER=openai`) — najprostsze dla demo lokalnego.
+2. **Azure OpenAI** (`LLM_PROVIDER=azure`) — zalecane dla produkcji i danych osobowych.
 
-### Wariant A: Azure OpenAI (domyślny)
+### Wariant A: OpenAI API (demo lokalne)
+
+| Zmienna              | Opis                                            |
+|----------------------|-------------------------------------------------|
+| `LLM_PROVIDER`       | `openai`                                        |
+| `OPENAI_API_KEY`     | Klucz API OpenAI                                |
+| `OPENAI_CHAT_MODEL`  | Model czatu (np. `gpt-4o-mini`)                 |
+| `OPENAI_EMBEDDING_MODEL` | Model embeddingów / RAG (np. `text-embedding-3-small`) |
+| `OPENAI_BASE_URL`    | Opcjonalnie, domyślnie `https://api.openai.com/v1` |
+
+### Wariant B: Azure OpenAI (produkcja)
 
 | Zmienna                          | Opis                                       |
 |----------------------------------|--------------------------------------------|
 | `LLM_PROVIDER`                   | `azure`                                    |
 | `AZURE_OPENAI_API_KEY`          | Klucz API Azure OpenAI                     |
 | `AZURE_OPENAI_ENDPOINT`         | Endpoint Azure OpenAI                      |
-| `AZURE_OPENAI_GPT_DEPLOYMENT`   | Nazwa deploymentu modelu GPT (np. `gpt-4.1-nano`) |
+| `AZURE_OPENAI_GPT_DEPLOYMENT`   | Nazwa deploymentu modelu GPT (np. `gpt-4o-mini`) |
 | `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | Nazwa deploymentu embeddingu (np. `text-embedding-3-small`) |
 
-### Wariant B: OpenAI API
+W produkcji wybierz region Azure zgodny z wymaganiami organizacji; dla danych
+kandydatów rekomendowany jest region w UE.
 
-| Zmienna              | Opis                                            |
-|----------------------|-------------------------------------------------|
-| `LLM_PROVIDER`       | `openai`                                        |
-| `OPENAI_API_KEY`     | Klucz API OpenAI                                |
-| `OPENAI_CHAT_MODEL`  | Model czatu (np. `gpt-4.1-nano`)                |
-| `OPENAI_BASE_URL`    | Opcjonalnie, domyślnie `https://api.openai.com/v1` |
+### Który provider wybrać?
 
-> Uwaga: nawet przy `LLM_PROVIDER=openai` część funkcji pomocniczych może nadal
-> korzystać z ustawień Azure, jeśli zostaną jawnie wymuszone w kodzie.
-> Dla typowego uruchomienia aplikacji wystarczy poprawna konfiguracja wybranego providera.
+| Środowisko | `LLM_PROVIDER` | Dlaczego |
+|------------|----------------|----------|
+| **Test / dev lokalny** | `openai` | Wystarczy jeden klucz `OPENAI_API_KEY` do czatu, feedbacku **i** Qdrant (RAG). |
+| **Produkcja / dane osobowe** | `azure` | Zalecane: region Azure w UE, kontrola rezydencji danych i polityki firmowej. |
+
+Przy `LLM_PROVIDER=openai` embeddingi używają `OPENAI_EMBEDDING_MODEL` (domyślnie
+`text-embedding-3-small`). Przy `azure` — `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`.
 
 **Opcjonalne – wysyłka maili i monitoring:**
 
-- `EMAIL_USERNAME`, `EMAIL_PASSWORD`
-- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USE_TLS`
-- `IMAP_HOST`, `IMAP_PORT`
-- `EMAIL_MONITOR_ENABLED` (`true`/`false`)
-- `IOD_EMAIL`, `HR_EMAIL`, `EMAIL_CHECK_INTERVAL`
-
-Pełna instrukcja konfiguracji skrzynek (Zoho/Gmail/Office 365) jest tutaj:
-- [Konfiguracja e‑mail (SMTP/IMAP)](EMAIL_SETUP_PL.md)
+- `EMAIL_USERNAME`, `EMAIL_PASSWORD` — login do **IMAP (nasłuch)** i **SMTP (wysyłka)**.
+- `SMTP_*`, `IMAP_*` — hosty i porty od dostawcy poczty.
+- `EMAIL_MONITOR_ENABLED`, `EMAIL_CHECK_INTERVAL` — cykliczne sprawdzanie skrzynki.
+- `IOD_EMAIL`, `HR_EMAIL` — **inne** skrzynki na przekazania (muszą różnić się od `EMAIL_USERNAME`).
 
 > Dobra praktyka: najpierw uruchom system tylko z jednym providerem LLM (Azure albo OpenAI),
-> a dopiero potem dodaj konfigurację e‑maili.
+> a dopiero potem dodaj pocztę. Przed włączeniem monitora przeczytaj
+> [osobne skrzynki – unikaj pętli](EMAIL_SETUP_PL.md#zanim-zaczniesz).
 
 ---
 
@@ -173,8 +195,10 @@ i (opcjonalnie) załadowane dane przykładowe.
    - zwaliduje go i ewentualnie poprawi,
    - przygotuje maila do wysłania.
 
-Jeżeli SMTP jest skonfigurowane, mail zostanie wysłany;
-w przeciwnym razie możesz przynajmniej podejrzeć wygenerowaną treść.
+Jeżeli SMTP jest skonfigurowane, mail trafia do kandydata.
+Bez SMTP — treść jest zapisana w bazie i widać ją w panelu administracyjnym
+(**http://localhost:5000/admin**, sekcja **„Wysłane emaile z feedbackiem”**,
+kolumna **„Treść emaila”**), ale **to nie zastępuje** realnej wysyłki w rekrutacji.
 
 ---
 
@@ -203,21 +227,25 @@ dokumentów firmy:
   - błąd przy starcie aplikacji,
   - błędy przy generowaniu feedbacku (np. 401 / 403 z Azure).
 - **Sprawdź:**
-  - czy w `.env` masz `AZURE_OPENAI_API_KEY` bez cudzysłowów,
-  - czy endpoint (`AZURE_OPENAI_ENDPOINT`) jest poprawny,
-  - czy deploymenty GPT/embedding istnieją w Azure.
+  - przy `LLM_PROVIDER=openai`: czy masz `OPENAI_API_KEY` bez cudzysłowów i aktywne rozliczenia OpenAI,
+  - przy `LLM_PROVIDER=azure`: czy masz `AZURE_OPENAI_API_KEY` bez cudzysłowów,
+  - czy endpoint (`AZURE_OPENAI_ENDPOINT`) jest poprawny dla Azure,
+  - czy deploymenty GPT/embedding istnieją w Azure, jeśli używasz Azure.
 
-### 7.2. Błędy SMTP/IMAP (logowanie do poczty)
+### 7.2. Błędy SMTP/IMAP i zapętlenie maili
 
 - **Objawy:**
   - „Authentication failed”,
   - brak możliwości wysyłki maili,
-  - logi z IMAP z informacją o błędnym loginie/haśle.
+  - logi z IMAP z informacją o błędnym loginie/haśle,
+  - te same wiadomości przetwarzane w kółko.
 - **Sprawdź:**
   - czy używasz **app password**, jeśli dostawca tego wymaga (Gmail, Zoho),
   - czy host/port są poprawne (patrz dokumentacja dostawcy),
   - czy IMAP/SMTP jest włączone na koncie (np. w ustawieniach Gmail/Zoho),
-  - czy `EMAIL_USERNAME` i `EMAIL_PASSWORD` są prawidłowe.
+  - czy `EMAIL_USERNAME` i `EMAIL_PASSWORD` są prawidłowe,
+  - czy `HR_EMAIL` i `IOD_EMAIL` **nie są** takie same jak `EMAIL_USERNAME`
+    ([szczegóły](EMAIL_SETUP_PL.md#zanim-zaczniesz)).
 
 ### 7.3. Qdrant nie startuje / „connection refused”
 

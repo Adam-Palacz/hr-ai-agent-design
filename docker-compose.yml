@@ -9,21 +9,25 @@ services:
     container_name: recruitment-ai-app
     ports:
       - "5000:5000"
+    env_file:
+      - .env
     environment:
       # LLM provider selection
-      - LLM_PROVIDER=${LLM_PROVIDER:-azure}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
 
-      # Azure OpenAI (default)
+      # Azure OpenAI (recommended for production)
       - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-https://openai-agentai-pl.openai.azure.com/}
       - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-12-01-preview}
-      - AZURE_OPENAI_GPT_DEPLOYMENT=${AZURE_OPENAI_GPT_DEPLOYMENT:-gpt-4.1-nano}
+      - AZURE_OPENAI_GPT_DEPLOYMENT=${AZURE_OPENAI_GPT_DEPLOYMENT:-gpt-4o-mini}
       - AZURE_OPENAI_VISION_DEPLOYMENT=${AZURE_OPENAI_VISION_DEPLOYMENT:-gpt-5-nano}
+      - AZURE_OPENAI_EMBEDDING_DEPLOYMENT=${AZURE_OPENAI_EMBEDDING_DEPLOYMENT:-text-embedding-3-small}
 
-      # OpenAI (api.openai.com) – optional, used when LLM_PROVIDER=openai
+      # OpenAI (api.openai.com) – recommended for local/demo
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
-      - OPENAI_CHAT_MODEL=${OPENAI_CHAT_MODEL:-gpt-4.1-nano}
+      - OPENAI_CHAT_MODEL=${OPENAI_CHAT_MODEL:-gpt-4o-mini}
+      - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
 
       # Email/SMTP
       - EMAIL_USERNAME=${EMAIL_USERNAME}
@@ -50,6 +54,10 @@ services:
       # Logging
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - VERBOSE=${VERBOSE:-false}
+
+      # CV parsing (see .env.example)
+      - CV_PARSING_ENABLED=${CV_PARSING_ENABLED:-true}
+      - CV_LLM_PARSING_ENABLED=${CV_LLM_PARSING_ENABLED:-true}
 
       # Flask (in Docker must listen on 0.0.0.0 to accept external connections)
       - FLASK_HOST=0.0.0.0
@@ -78,10 +86,10 @@ services:
       - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY:-test-key-no-real-calls}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-https://test.openai.azure.com/}
       - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-12-01-preview}
-      - AZURE_OPENAI_GPT_DEPLOYMENT=${AZURE_OPENAI_GPT_DEPLOYMENT:-gpt-4.1-nano}
+      - AZURE_OPENAI_GPT_DEPLOYMENT=${AZURE_OPENAI_GPT_DEPLOYMENT:-gpt-4o-mini}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
-      - OPENAI_CHAT_MODEL=${OPENAI_CHAT_MODEL:-gpt-4.1-nano}
+      - OPENAI_CHAT_MODEL=${OPENAI_CHAT_MODEL:-gpt-4o-mini}
     command: pytest tests/ -v --cov=app --cov=config --cov=agents --cov=services --cov=routes --cov=database --cov-report=term-missing --cov-fail-under=40
     volumes:
       - ./data:/app/data

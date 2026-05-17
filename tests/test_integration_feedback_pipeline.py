@@ -176,3 +176,76 @@ def test_feedback_pipeline_rejected_then_corrected(mock_get_llm):
     assert "Dear" in feedback.html_content
     assert is_validated is True
     assert error_info is None
+
+
+@pytest.mark.integration
+@patch("agents.base_agent.get_llm_client")
+def test_feedback_pipeline_validation_exhausted_returns_not_validated(mock_get_llm):
+    """After max validation iterations without approval, is_validated is False and error_info is set."""
+    html = "<p>Informal draft</p>"
+    validation_rejected = json.dumps(
+        {
+            "status": "rejected",
+            "is_approved": False,
+            "reasoning": "Still informal.",
+            "issues_found": ["Tone"],
+            "ethical_concerns": [],
+            "factual_errors": [],
+            "suggestions": ["Formalize"],
+        }
+    )
+    correction_json = json.dumps(
+        {
+            "html_content": "<p>Still informal</p>",
+            "corrections_made": ["Attempt"],
+            "explanation": "Try again.",
+        }
+    )
+
+    mock_adapter = MagicMock()
+    mock_adapter.complete.side_effect = [
+        (json.dumps({"html_content": html}), _make_completion(json.dumps({"html_content": html}))),
+        (validation_rejected, _make_completion(validation_rejected)),
+        (correction_json, _make_completion(correction_json)),
+        (validation_rejected, _make_completion(validation_rejected)),
+    ]
+    mock_get_llm.return_value = mock_adapter
+
+    from agents.feedback_agent import FeedbackAgent
+    from agents.validation_agent import FeedbackValidatorAgent
+    from agents.correction_agent import FeedbackCorrectionAgent
+    from services.feedback_service import FeedbackService
+
+    cv_data = CVData(
+        full_name="Jan Testowy",
+        email="jan@example.com",
+        summary="Python developer.",
+        education=[],
+        experience=[],
+        skills=[],
+        certifications=[],
+        languages=[],
+    )
+    hr_feedback = HRFeedback(
+        decision=Decision.REJECTED,
+        notes="Good skills.",
+        position_applied="Backend Developer",
+        interviewer_name="HR Team",
+    )
+
+    service = FeedbackService(
+        FeedbackAgent(model_name="gpt-4o-mini"),
+        FeedbackValidatorAgent(model_name="gpt-4o-mini"),
+        FeedbackCorrectionAgent(model_name="gpt-4o-mini"),
+        max_validation_iterations=2,
+    )
+
+    feedback, is_validated, error_info = service.generate_feedback(
+        cv_data, hr_feedback, enable_validation=True
+    )
+
+    assert feedback.html_content is not None
+    assert is_validated is False
+    assert error_info is not None
+    assert error_info.get("max_iterations_reached") is True
+    assert len(error_info.get("validation_results", [])) >= 2

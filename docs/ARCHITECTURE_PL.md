@@ -27,7 +27,7 @@ Na najwyższym poziomie w systemie biorą udział:
   - wysyła i (opcjonalnie) monitoruje pocztę przez SMTP/IMAP,
   - używa Qdrant jako bazy wektorowej do RAG przy odpowiadaniu na pytania.
 - **Systemy zewnętrzne:**
-  - **Dostawca LLM** – Azure OpenAI (domyślnie) lub OpenAI; używany do parsowania CV,
+  - **Dostawca LLM** – OpenAI dla demo lokalnego lub Azure OpenAI dla produkcji; używany do parsowania CV,
     generowania feedbacku, walidacji/korekty maili oraz do odpowiedzi na pytania.
   - **Serwer SMTP/IMAP** – np. Zoho, Gmail, Office 365 lub inny kompatybilny z SMTP/IMAP.
   - **Qdrant** – baza wektorowa używana jako knowledge base dla RAG.
@@ -55,8 +55,8 @@ Z perspektywy kontenerów system składa się z:
   - przechowuje zembeddowane dokumenty z `knowledge_base/`.
 
 - **Dostawca LLM** – nie jest hostowany przez ten projekt:
-  - **Azure OpenAI** (domyślnie) – używa endpointu Azure + nazw deploymentów,
-  - **OpenAI** (opcjonalnie) – przez `api.openai.com` i oficjalnego klienta,
+  - **OpenAI** – najprostszy wariant demo lokalnego przez `api.openai.com` i oficjalnego klienta,
+  - **Azure OpenAI** – zalecany dla produkcji; używa endpointu Azure + nazw deploymentów i pozwala wybrać region przetwarzania danych,
   - wybór przez `LLM_PROVIDER` (`azure` / `openai`) i adapter w `llm/`.
 
 - **Serwer mailowy (SMTP/IMAP)** – dostawca zewnętrzny:

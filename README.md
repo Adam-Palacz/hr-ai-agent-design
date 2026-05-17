@@ -16,11 +16,16 @@ Web application for HR teams to manage recruitment: review CVs, track candidates
   - Polish: `docs/OVERVIEW_PL.md`
   - English: `docs/OVERVIEW_EN.md`
 - **Quickstart guides (from scratch):**
-  - Polish: `docs/QUICKSTART_PL.md`
-  - English: `docs/QUICKSTART_EN.md`
+  - Polish (non-technical): `docs/QUICKSTART_NONTECH_PL.md`
+  - English (non-technical): `docs/QUICKSTART_NONTECH_EN.md`
+  - Polish (full): `docs/QUICKSTART_PL.md`
+  - English (full): `docs/QUICKSTART_EN.md`
 - **Running with Docker:**
   - Polish: `docs/DOCKER_PL.md`
   - English: `docs/DOCKER_EN.md`
+- **Using the app after startup:**
+  - Polish: `docs/USER_GUIDE_PL.md`
+  - English: `docs/USER_GUIDE_EN.md`
 - **Generated API reference (MkDocs + mkdocstrings):**
   - Build and serve locally:
 
@@ -34,7 +39,7 @@ Web application for HR teams to manage recruitment: review CVs, track candidates
 ## Features
 
 - **Candidate management** – Add/edit candidates, upload PDF CVs, track status and recruitment stage (initial screening → HR interview → technical assessment → final interview → offer).
-- **AI-powered feedback** – On rejection, the system generates personalized, constructive feedback using Azure OpenAI (CV parsing, validation, and correction agents).
+- **AI-powered feedback** – On rejection, the system generates personalized, constructive feedback using OpenAI API for local demos or Azure OpenAI for production (CV parsing, validation, and correction agents).
 - **Email sending** – Send feedback emails via SMTP (Zoho, Gmail, etc.) with consent messages and privacy policy links.
 - **Email monitoring (optional)** – IMAP inbox monitoring; incoming emails are classified and either answered by AI (using basic knowledge or RAG), forwarded to HR, or handled as IOD (e.g. consent changes).
 - **RAG knowledge base** – Qdrant vector store for company documents (policies, GDPR/RODO, recruitment info). Used to answer candidate questions and to load context for feedback.
@@ -44,7 +49,7 @@ Web application for HR teams to manage recruitment: review CVs, track candidates
 ## Tech stack
 
 - **Backend:** Python 3.11, Flask
-- **AI:** Azure OpenAI (GPT, embeddings) by default; optional OpenAI (api.openai.com) via LLM adapter
+- **AI:** Azure OpenAI (recommended for production) or OpenAI API (api.openai.com) for local/test — one `LLM_PROVIDER` drives chat and embeddings
 - **Vector DB:** Qdrant
 - **Database:** SQLite
 - **Email:** SMTP (sending), IMAP (monitoring)
@@ -52,8 +57,8 @@ Web application for HR teams to manage recruitment: review CVs, track candidates
 ## Prerequisites
 
 - Python 3.11+
-- Azure OpenAI endpoint and API key (with GPT and embedding deployments)
-- (Optional) SMTP/IMAP credentials for email sending and monitoring
+- Azure OpenAI **or** OpenAI API key (see `LLM_PROVIDER` below)
+- SMTP credentials for **sending feedback to candidates** (required for the main workflow); IMAP only if you enable inbox monitoring
 
 ## Quick start
 
@@ -89,14 +94,29 @@ Copy the example env file and fill in your values:
 cp .env.example .env
 ```
 
-Required for AI and basic run:
+Required for AI and basic run, choose one provider:
+
+**Local/demo with OpenAI API:**
 
 | Variable | Description |
 |----------|-------------|
+| `LLM_PROVIDER` | Set to `openai` |
+| `OPENAI_API_KEY` | OpenAI API key |
+| `OPENAI_CHAT_MODEL` | Chat model (e.g. `gpt-4o-mini`) |
+| `OPENAI_EMBEDDING_MODEL` | Embedding model for RAG/Qdrant (e.g. `text-embedding-3-small`) |
+
+**Production with Azure OpenAI:**
+
+| Variable | Description |
+|----------|-------------|
+| `LLM_PROVIDER` | Set to `azure` |
 | `AZURE_OPENAI_API_KEY` | Azure OpenAI API key |
 | `AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint URL |
 | `AZURE_OPENAI_GPT_DEPLOYMENT` | GPT model deployment name (e.g. `gpt-4.1-nano`) |
 | `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | Embedding model (e.g. `text-embedding-3-small`) |
+
+For production with candidate data, Azure OpenAI is recommended because you can choose
+an EU Azure region and better control the data processing location.
 
 Optional – email sending and monitoring:
 
@@ -121,29 +141,25 @@ Other optional: `PRIVACY_POLICY_URL`, `COMPANY_WEBSITE`, `LOG_LEVEL`, `VERBOSE`,
 
 ### LLM provider (Azure / OpenAI)
 
-By default the app uses **Azure OpenAI**. There is an adapter layer which allows
-switching to the official OpenAI API.
+`LLM_PROVIDER` selects the backend for **chat, feedback, and Qdrant embeddings** (RAG):
 
-- `LLM_PROVIDER` – `azure` (default) or `openai`.
+| `LLM_PROVIDER` | Use case |
+|----------------|----------|
+| `openai` | **Local / demo** — single `OPENAI_API_KEY` for chat + embeddings; data processed per OpenAI policy. |
+| `azure` | **Production** — choose an EU Azure region for data residency and enterprise controls. |
 
-**When `LLM_PROVIDER=azure` (default):**
+**When `LLM_PROVIDER=azure`:**
 
-- Azure variables above must be set (`AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, etc.).
+- Set `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, GPT and embedding deployment names.
 
 **When `LLM_PROVIDER=openai`:**
 
-- `OPENAI_API_KEY` – OpenAI API key (required).
-- `OPENAI_BASE_URL` – optional, default `https://api.openai.com/v1`.
-- `OPENAI_CHAT_MODEL` – optional, e.g. `gpt-4o` (if not set, a reasonable default is used).
+- `OPENAI_API_KEY` (required)
+- `OPENAI_CHAT_MODEL` (e.g. `gpt-4o-mini`)
+- `OPENAI_EMBEDDING_MODEL` (e.g. `text-embedding-3-small`) for RAG / Qdrant
+- `OPENAI_BASE_URL` — optional, default `https://api.openai.com/v1`
 
-To switch provider:
-
-1. Set `LLM_PROVIDER=openai` in `.env`.
-2. Set `OPENAI_API_KEY` (and optionally `OPENAI_BASE_URL` / `OPENAI_CHAT_MODEL`).
-3. Restart the app.
-
-> Uwaga: w tej wersji MVP embeddingi (Qdrant) i część funkcji e‑mail mogą nadal
-> korzystać wyłącznie z konfiguracji Azure.
+Restart the app after changing `.env`.
 
 ### 3. Database and seed data
 
@@ -278,8 +294,13 @@ pytest tests/ --cov=app --cov=config --cov=agents --cov=services --cov=routes --
 
 Or from project root: `python -m pytest tests/ -v`
 
-- **Integration tests** (feedback pipeline with mocks): run with `pytest -m integration` or as part of default `pytest tests/`.
-- **LLM evaluation tests**: run with `RUN_LLM_EVAL=1 pytest -m evaluation` for optional real-LLM checks (see `tests/test_llm_evaluation.py`).
+- **Integration tests** (`pytest -m integration`): full feedback pipeline with mocked LLM, including validation-exhaustion path.
+- **AI agent tests** (`tests/test_email_classifier_agent.py`, `tests/test_query_classifier_agent.py`): routing/classification logic with mocked LLM.
+- **LLM evaluation** (`tests/evaluation_criteria.py` + `tests/test_llm_evaluation.py`):
+  - Default `pytest` runs criteria checks and mocked pipelines (no API cost).
+  - Real model check: `RUN_LLM_EVAL=1 pytest tests/test_llm_evaluation.py -m evaluation -v` (requires `OPENAI_API_KEY` or Azure credentials per `LLM_PROVIDER`).
+  - Live SMTP/E2E (uses `.env`, may send real mail): `LIVE_TEST=1 pytest tests/test_live_integration.py -v -s`
+  - Criteria include: valid HTML, length, no PII leak, rejection tone, position mention, no discriminatory phrasing.
 
 **Run tests inside Docker** (same image as production, no Qdrant needed):
 

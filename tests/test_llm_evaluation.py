@@ -1,153 +1,226 @@
 """
-LLM evaluation tests: reference inputs and automated criteria (structure, length, disallowed words).
+LLM evaluation tests: automated quality criteria + optional real API run.
 
-- With mock LLM: run always (sanity check that evaluation pipeline works).
-- With real LLM: run only when RUN_LLM_EVAL=1 (optional; for prompt/model changes).
-
-Usage:
   pytest tests/test_llm_evaluation.py -v
-  RUN_LLM_EVAL=1 pytest tests/test_llm_evaluation.py -v -m evaluation  # optional real API
+  RUN_LLM_EVAL=1 pytest tests/test_llm_evaluation.py -m evaluation -v
 """
 
+import json
 import os
-import re
+
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-# Reference input (anonymized/synthetic)
-REFERENCE_CV_TEXT = (
-    "John Doe\n"
-    "Email: john.doe@example.com\n"
-    "5+ years Python, REST APIs, SQL.\n"
-    "Education: MSc Computer Science, University of Warsaw.\n"
-    "Experience: Backend Developer at Tech Corp 2020–2024."
+from models.cv_models import CVData
+from models.feedback_models import Decision, HRFeedback
+from models.job_models import JobOffer
+from tests.evaluation_criteria import (
+    REFERENCE_CANDIDATE_EMAIL,
+    REFERENCE_CANDIDATE_NAME,
+    REFERENCE_COMPANY,
+    REFERENCE_POSITION,
+    check_html_valid,
+    check_length_reasonable,
+    check_no_disallowed_words,
+    check_no_discriminatory_language,
+    check_no_email_leak,
+    check_rejection_tone,
+    evaluate_feedback_html,
+    llm_eval_api_configured,
 )
-REFERENCE_POSITION = "Backend Developer"
-
-
-def check_html_valid(html: str) -> bool:
-    """Ensure output is valid HTML (reuse project validation)."""
-    if not html or not isinstance(html, str):
-        return False
-    from models.validation_models import _is_parseable_html, _is_likely_html
-
-    return _is_likely_html(html) and _is_parseable_html(html)
-
-
-def check_length_reasonable(html: str, min_len: int = 200, max_len: int = 5000) -> bool:
-    """Output length should be in a reasonable range."""
-    return min_len <= len(html) <= max_len
-
-
-DISALLOWED_WORDS = ["TODO", "Lorem", "INSERT", "FIXME", "XXX"]
-
-
-def check_no_disallowed_words(html: str, words: list[str] | None = None) -> bool:
-    """No placeholder or disallowed words in output."""
-    words = words or DISALLOWED_WORDS
-    return not any(w in html for w in words)
-
-
-def check_no_email_leak(html: str) -> bool:
-    """No raw email pattern (simple check for obvious leak)."""
-    # Allow e.g. mailto: or masked; disallow obvious user@domain
-    pattern = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
-    return re.search(pattern, html) is None
-
-
-# --- Tests with mock LLM ---
 
 
 @pytest.fixture
 def good_html():
-    """Valid, reasonable feedback HTML for evaluation criteria."""
     return (
         "<!DOCTYPE html><html><body>"
-        "<p>Dear Candidate,</p>"
-        "<p>Thank you for your application to the Backend Developer position.</p>"
-        "<p>We have carefully reviewed your experience and skills.</p>"
-        "<p>Unfortunately we have decided to pursue other candidates at this time.</p>"
-        "<p>We wish you success in your job search.</p>"
-        "<p>Best regards,</p><p>HR Team</p>"
+        "<p>Szanowny Kandydacie,</p>"
+        "<p>Dziękujemy za złożenie aplikacji na stanowisko Backend Developer.</p>"
+        "<p>Z przykrością informujemy, że zdecydowaliśmy się procedować z innymi kandydatami.</p>"
+        "<p>Na podstawie CV stwierdzono solidne umiejętności techniczne.</p>"
+        "<p>Pozdrawiamy,</p><p>Zespół HR</p>"
         "</body></html>"
     )
 
 
-def test_evaluation_criteria_valid_html_passes(good_html):
-    """Evaluation: valid HTML passes check_html_valid."""
-    assert check_html_valid(good_html) is True
-
-
-def test_evaluation_criteria_length_passes(good_html):
-    """Evaluation: reasonable length passes check_length_reasonable."""
-    assert check_length_reasonable(good_html) is True
-
-
-def test_evaluation_criteria_disallowed_words_fails():
-    """Evaluation: HTML containing TODO fails check_no_disallowed_words."""
-    html_with_todo = "<p>Hello</p><p>TODO: add more</p>"
-    assert check_no_disallowed_words(html_with_todo) is False
-
-
-def test_evaluation_criteria_disallowed_words_passes(good_html):
-    """Evaluation: clean HTML passes check_no_disallowed_words."""
-    assert check_no_disallowed_words(good_html) is True
-
-
-def test_evaluation_criteria_email_leak_fails():
-    """Evaluation: HTML containing raw email fails check_no_email_leak."""
-    html_with_email = "<p>Contact: user@example.com</p>"
-    assert check_no_email_leak(html_with_email) is False
-
-
-def test_evaluation_criteria_email_leak_passes(good_html):
-    """Evaluation: HTML without raw email passes check_no_email_leak."""
-    assert check_no_email_leak(good_html) is True
-
-
-@patch("agents.base_agent.get_llm_client")
-def test_evaluation_mock_llm_output_passes_all_criteria(mock_get_llm, good_html):
-    """With mock LLM returning good HTML, all evaluation criteria pass."""
-    import json
-    from agents.feedback_agent import FeedbackAgent
-    from models.cv_models import CVData
-    from models.feedback_models import HRFeedback, Decision
-
-    mock_adapter = MagicMock()
-    completion = MagicMock(
-        choices=[MagicMock(message=MagicMock(content=json.dumps({"html_content": good_html})))],
-        usage=MagicMock(prompt_tokens=10, completion_tokens=20, total_tokens=30),
-    )
-    mock_adapter.complete.return_value = (json.dumps({"html_content": good_html}), completion)
-    mock_get_llm.return_value = mock_adapter
-
-    agent = FeedbackAgent(model_name="gpt-4o-mini")
-    cv = CVData(
-        full_name="John Doe",
-        email="john@example.com",
-        summary="5 years Python.",
+@pytest.fixture
+def reference_cv():
+    return CVData(
+        full_name=REFERENCE_CANDIDATE_NAME,
+        email=REFERENCE_CANDIDATE_EMAIL,
+        summary="Python, REST, SQL, 5 lat doświadczenia.",
         education=[],
         experience=[],
         skills=[],
         certifications=[],
         languages=[],
     )
-    hr = HRFeedback(
-        decision=Decision.REJECTED,
-        notes="Strong technical skills.",
-        position_applied=REFERENCE_POSITION,
-        interviewer_name="HR",
-    )
-    result = agent.generate_feedback(cv, hr)
 
-    assert check_html_valid(result.html_content)
-    assert check_length_reasonable(result.html_content)
-    assert check_no_disallowed_words(result.html_content)
-    assert check_no_email_leak(result.html_content)
+
+@pytest.fixture
+def reference_hr_feedback():
+    return HRFeedback(
+        decision=Decision.REJECTED,
+        notes="Dobre umiejętności techniczne, brak doświadczenia w domenie fintech.",
+        position_applied=REFERENCE_POSITION,
+        interviewer_name="HR Team",
+    )
+
+
+@pytest.fixture
+def reference_job_offer():
+    return JobOffer(
+        title=REFERENCE_POSITION,
+        company=REFERENCE_COMPANY,
+        location="Warszawa",
+        description="Python, REST APIs, SQL.",
+    )
+
+
+# --- Criteria unit tests ---
+
+
+def test_evaluation_criteria_valid_html_passes(good_html):
+    assert check_html_valid(good_html) is True
+
+
+def test_evaluation_criteria_length_passes(good_html):
+    assert check_length_reasonable(good_html) is True
+
+
+def test_evaluation_criteria_disallowed_words_fails():
+    assert check_no_disallowed_words("<p>Hello</p><p>TODO: add more</p>") is False
+
+
+def test_evaluation_criteria_disallowed_words_passes(good_html):
+    assert check_no_disallowed_words(good_html) is True
+
+
+def test_evaluation_criteria_email_leak_fails():
+    assert check_no_email_leak("<p>Contact: user@example.com</p>", []) is False
+
+
+def test_evaluation_criteria_email_leak_passes(good_html):
+    assert check_no_email_leak(good_html, [REFERENCE_CANDIDATE_EMAIL]) is True
+
+
+def test_evaluation_criteria_rejection_tone(good_html):
+    assert check_rejection_tone(good_html) is True
+    assert check_rejection_tone("<p>Dziękujemy za aplikację.</p>") is False
+
+
+def test_evaluation_criteria_discriminatory_fails():
+    assert check_no_discriminatory_language("<p>Kandydat jest za stary na to stanowisko.</p>") is False
+
+
+def test_evaluate_feedback_html_all_pass(good_html):
+    assert evaluate_feedback_html(
+        good_html,
+        position=REFERENCE_POSITION,
+        candidate_emails=[REFERENCE_CANDIDATE_EMAIL],
+    ) == []
+
+
+# --- Mock LLM pipeline ---
+
+
+@patch("agents.base_agent.get_llm_client")
+def test_evaluation_mock_llm_output_passes_all_criteria(
+    mock_get_llm, good_html, reference_cv, reference_hr_feedback
+):
+    from agents.feedback_agent import FeedbackAgent
+
+    mock_adapter = MagicMock()
+    payload = json.dumps({"html_content": good_html})
+    mock_adapter.complete.return_value = (payload, MagicMock())
+    mock_get_llm.return_value = mock_adapter
+
+    agent = FeedbackAgent(model_name="gpt-4o-mini")
+    result = agent.generate_feedback(reference_cv, reference_hr_feedback)
+
+    failures = evaluate_feedback_html(
+        result.html_content,
+        position=REFERENCE_POSITION,
+        candidate_emails=[REFERENCE_CANDIDATE_EMAIL],
+    )
+    assert failures == [], f"Criteria failures: {failures}"
+
+
+@patch("agents.base_agent.get_llm_client")
+def test_evaluation_full_service_with_validation_mock(
+    mock_get_llm, good_html, reference_cv, reference_hr_feedback, reference_job_offer
+):
+    """FeedbackService end-to-end on mocks: generate + validate + criteria."""
+    from agents.correction_agent import FeedbackCorrectionAgent
+    from agents.feedback_agent import FeedbackAgent
+    from agents.validation_agent import FeedbackValidatorAgent
+    from services.feedback_service import FeedbackService
+
+    validation_approved = json.dumps(
+        {
+            "status": "approved",
+            "is_approved": True,
+            "reasoning": "OK",
+            "issues_found": [],
+            "ethical_concerns": [],
+            "factual_errors": [],
+            "suggestions": [],
+        }
+    )
+    mock_adapter = MagicMock()
+    mock_adapter.complete.side_effect = [
+        (json.dumps({"html_content": good_html}), MagicMock()),
+        (validation_approved, MagicMock()),
+    ]
+    mock_get_llm.return_value = mock_adapter
+
+    service = FeedbackService(
+        FeedbackAgent(model_name="gpt-4o-mini"),
+        FeedbackValidatorAgent(model_name="gpt-4o-mini"),
+        FeedbackCorrectionAgent(model_name="gpt-4o-mini"),
+        max_validation_iterations=3,
+    )
+    feedback, is_validated, error_info = service.generate_feedback(
+        reference_cv,
+        reference_hr_feedback,
+        job_offer=reference_job_offer,
+        enable_validation=True,
+    )
+
+    assert is_validated is True
+    assert error_info is None
+    failures = evaluate_feedback_html(
+        feedback.html_content,
+        position=REFERENCE_POSITION,
+        candidate_emails=[REFERENCE_CANDIDATE_EMAIL],
+    )
+    assert failures == []
+
+
+# --- Real LLM (optional) ---
 
 
 @pytest.mark.evaluation
-@pytest.mark.skipif(not os.environ.get("RUN_LLM_EVAL"), reason="RUN_LLM_EVAL=1 not set")
-def test_evaluation_real_llm_optional():
-    """Optional: run with real LLM (RUN_LLM_EVAL=1) to evaluate model output. Skipped by default."""
-    pytest.skip("Real LLM evaluation: run manually with RUN_LLM_EVAL=1 and API key")
+@pytest.mark.skipif(not os.environ.get("RUN_LLM_EVAL"), reason="Set RUN_LLM_EVAL=1 to run")
+@pytest.mark.skipif(not llm_eval_api_configured(), reason="No API key for LLM_PROVIDER")
+def test_evaluation_real_llm_feedback_quality(
+    reference_cv, reference_hr_feedback, reference_job_offer
+):
+    """Calls the real LLM once; asserts automated quality criteria on output."""
+    from agents.feedback_agent import FeedbackAgent
+
+    agent = FeedbackAgent()
+    feedback = agent.generate_feedback(
+        reference_cv,
+        reference_hr_feedback,
+        job_offer=reference_job_offer,
+    )
+
+    assert feedback.html_content, "Model returned empty html_content"
+
+    failures = evaluate_feedback_html(
+        feedback.html_content,
+        position=REFERENCE_POSITION,
+        candidate_emails=[REFERENCE_CANDIDATE_EMAIL],
+    )
+    assert failures == [], "Real LLM output failed criteria:\n- " + "\n- ".join(failures)

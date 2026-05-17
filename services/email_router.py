@@ -447,50 +447,24 @@ Temat: {email_data.get('subject', 'Brak tematu')}
         """Lazy-load RAG database when needed."""
         if self.rag_db is None:
             try:
-                azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-                azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
-                azure_deployment = os.getenv(
-                    "AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-3-small"
-                )
-                azure_api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
+                from services.qdrant_service import create_qdrant_rag
 
-                # Prefer Qdrant server over local path (avoids locking issues)
-                qdrant_host = os.getenv(
-                    "QDRANT_HOST", "qdrant"
-                )  # Default to service name in Docker
+                qdrant_host = os.getenv("QDRANT_HOST", "qdrant")
                 qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
-                qdrant_path = os.getenv("QDRANT_PATH")  # Optional, only if server not available
+                qdrant_path = os.getenv("QDRANT_PATH")
 
-                if azure_api_key:
-                    # Try server first, fallback to local path
-                    if qdrant_host:
-                        self.rag_db = QdrantRAG(
-                            collection_name="recruitment_knowledge_base",
-                            use_azure_openai=True,
-                            azure_endpoint=azure_endpoint,
-                            azure_api_key=azure_api_key,
-                            azure_deployment=azure_deployment,
-                            azure_api_version=azure_api_version,
-                            qdrant_host=qdrant_host,
-                            qdrant_port=qdrant_port,
-                        )
-                    elif qdrant_path:
-                        self.rag_db = QdrantRAG(
-                            collection_name="recruitment_knowledge_base",
-                            use_azure_openai=True,
-                            azure_endpoint=azure_endpoint,
-                            azure_api_key=azure_api_key,
-                            azure_deployment=azure_deployment,
-                            azure_api_version=azure_api_version,
-                            qdrant_path=qdrant_path,
-                        )
-                    else:
-                        logger.warning("Neither QDRANT_HOST nor QDRANT_PATH set, RAG unavailable")
-                        return None
-
-                    logger.info("RAG database initialized")
+                if qdrant_host:
+                    self.rag_db = create_qdrant_rag(
+                        qdrant_host=qdrant_host,
+                        qdrant_port=qdrant_port,
+                    )
+                elif qdrant_path:
+                    self.rag_db = create_qdrant_rag(qdrant_path=qdrant_path)
                 else:
-                    logger.warning("Azure OpenAI API key not set, RAG unavailable")
+                    logger.warning("Neither QDRANT_HOST nor QDRANT_PATH set, RAG unavailable")
+                    return None
+
+                logger.info("RAG database initialized")
             except Exception as e:
                 logger.warning(f"Failed to initialize RAG database: {e}")
         return self.rag_db

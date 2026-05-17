@@ -4,29 +4,90 @@ This app uses **standard SMTP (sending)** and **IMAP (monitoring)** and can work
 any provider that supports them (Zoho, Gmail, Office 365, etc.). Configuration is done
 via environment variables in `.env`.
 
+If you have never configured mail for an application before, read
+[Before you configure](#before-you-configure) first, then return to the provider
+sections below.
+
 Always use an **app password / application-specific password** when your provider
 requires it (e.g. Gmail, Zoho), not your main account password.
 If your provider does not use app passwords, follow that provider’s official
 authentication guidance.
 
-## Official sources (SMTP/IMAP + app passwords)
+## Before you configure
 
-- **Gmail – SMTP/IMAP:**
-  - Google Workspace Admin Help: <https://support.google.com/a/answer/9003945>
-  - Gmail Developers (IMAP/SMTP): <https://developers.google.com/gmail/imap/imap-smtp>
-- **Gmail – App Passwords:**
-  - Gmail Help: <https://support.google.com/mail/answer/185833>
+### SMTP and IMAP in plain language
 
-- **Zoho Mail – SMTP/IMAP:**
-  - Zoho Mail Help: <https://www.zoho.com/mail/help/imap-access.html>
-- **Zoho Mail – app passwords:**
-  - Zoho Accounts: <https://accounts.zoho.com/home#security/app_passwords>
+| Protocol | Direction | What it does in this project |
+|----------|-----------|------------------------------|
+| **SMTP** | Outgoing | Sends emails: candidate feedback, acknowledgements, forwards to HR/IOD. |
+| **IMAP** | Incoming | Connects to a mailbox and reads **new** messages so the monitor can process them. |
 
-- **Microsoft 365 / Exchange Online – SMTP AUTH:**
-  - Microsoft Learn: <https://learn.microsoft.com/exchange/clients-and-mobile-in-exchange-online/authenticated-client-smtp-submission>
+You do not “install” SMTP or IMAP — your mail provider exposes them as server hostnames
+and ports (e.g. `smtp.zoho.eu:587`, `imap.zoho.eu:993`). The app stores these in `.env`.
+
+### How this app maps variables to mailboxes
+
+| Variable | Role |
+|----------|------|
+| `EMAIL_USERNAME` + `EMAIL_PASSWORD` | Login for **both** IMAP (listen) and SMTP (send). This is the **monitored** inbox. |
+| `IOD_EMAIL` | Destination for GDPR / information-request forwards (must be a **different** address). |
+| `HR_EMAIL` | Destination for HR forwards when the bot cannot answer (must be a **different** address). |
+| `EMAIL_MONITOR_ENABLED` | `true` turns on background IMAP polling (`EMAIL_CHECK_INTERVAL` in seconds). |
+
+The monitor watches `EMAIL_USERNAME` via IMAP. When it decides to forward a message, it
+**sends** a new email to `HR_EMAIL` or `IOD_EMAIL` via SMTP. Those messages must land in
+**other** mailboxes — not in the same inbox that is being watched.
+
+### Critical: separate mailboxes (avoid infinite loops)
+
+> **Do not** set `HR_EMAIL` or `IOD_EMAIL` to the same address as `EMAIL_USERNAME`.
+>
+> If the monitored inbox and a forward target are the same, the app will forward mail
+> to itself, the monitor will see it as a new message, and processing can repeat
+> indefinitely.
+
+For **demos and local testing**:
+
+- Use **dedicated test addresses**, not your real company HR or IOD inboxes.
+- Use at least **three different mailboxes**, for example:
+  - `recruitment-bot@your-domain.test` → `EMAIL_USERNAME` (listen + send as this account),
+  - `hr-test@your-domain.test` → `HR_EMAIL`,
+  - `iod-test@your-domain.test` → `IOD_EMAIL`.
+- Never use one address for both “inbox we watch” and “inbox we forward to”.
+
+**Why Zoho appears in examples:** on a free Zoho Mail plan you can create several
+mailboxes on one domain, which makes a safe demo layout easy without mixing production
+HR traffic with the bot.
+
+**Your own provider:** if you can create multiple mailboxes (Google Workspace,
+Microsoft 365, your hosting panel, etc.), you may use that provider instead — the app
+only needs working SMTP + IMAP and **distinct** addresses as above.
+
+### Official sources (what each link is for)
+
+- **Gmail – enable IMAP/SMTP and find server settings**
+  - [Google Workspace Admin Help](https://support.google.com/a/answer/9003945) — allowed
+    clients, routing, and org-wide mail settings.
+  - [Gmail Developers (IMAP/SMTP)](https://developers.google.com/gmail/imap/imap-smtp) —
+    hostnames, ports, and protocol details for developers.
+- **Gmail – app password (required with 2FA)**
+  - [Gmail Help – App passwords](https://support.google.com/mail/answer/185833) — create
+    the value you put in `EMAIL_PASSWORD` (not your normal Gmail password).
+
+- **Zoho Mail – enable IMAP/SMTP**
+  - [Zoho Mail – IMAP access](https://www.zoho.com/mail/help/imap-access.html) — turn on
+    IMAP in the mailbox and confirm `imap.zoho.eu` / `smtp.zoho.eu` (or `.com`).
+- **Zoho Mail – app password**
+  - [Zoho Accounts – App passwords](https://accounts.zoho.com/home#security/app_passwords) —
+    generate a password for `EMAIL_PASSWORD`.
+
+- **Microsoft 365 – SMTP submission**
+  - [Microsoft Learn – SMTP AUTH](https://learn.microsoft.com/exchange/clients-and-mobile-in-exchange-online/authenticated-client-smtp-submission) —
+    when SMTP is allowed and how tenants enable it.
 
 > Note for Microsoft 365: classic IMAP/SMTP username+password may be restricted by
-> tenant policies; OAuth is recommended where possible.
+> tenant policies; OAuth is recommended where possible. For demos, prefer a provider
+> where you control several test mailboxes without tenant blocks.
 
 ## 1. Environment variables
 
@@ -54,6 +115,17 @@ and `services/email_monitor.py`.
 ---
 
 ## 2. Zoho Mail
+
+Recommended for **demos** when you need several cheap test mailboxes on one domain.
+
+**Typical flow:**
+
+1. Create a Zoho Mail account and add your domain (or use a Zoho-provided address).
+2. Create **separate users/aliases** for the bot inbox, `HR_EMAIL`, and `IOD_EMAIL`.
+3. Enable IMAP for the bot mailbox ([Zoho IMAP help](https://www.zoho.com/mail/help/imap-access.html)).
+4. Generate an [app password](https://accounts.zoho.com/home#security/app_passwords) for
+   `EMAIL_USERNAME` and put it in `EMAIL_PASSWORD`.
+5. In `.env`, set `HR_EMAIL` / `IOD_EMAIL` to the **other** addresses — never the bot inbox.
 
 Use the EU or COM region matching your account.
 
@@ -88,6 +160,16 @@ documentation for “app passwords” or “SMTP/IMAP access” to generate one.
 ---
 
 ## 3. Gmail
+
+**Typical flow:**
+
+1. Enable IMAP in Gmail settings ([Admin Help](https://support.google.com/a/answer/9003945)
+   for Workspace, or Gmail settings → “Forwarding and POP/IMAP” for personal Gmail).
+2. Turn on **2-Step Verification** on the Google account.
+3. Create an [App password](https://support.google.com/mail/answer/185833) and use it as
+   `EMAIL_PASSWORD`.
+4. Use a **dedicated** `@gmail.com` (or Workspace) address for `EMAIL_USERNAME`; set
+   `HR_EMAIL` / `IOD_EMAIL` to **other** Google mailboxes you own for testing.
 
 For Gmail users, required:
 
@@ -165,6 +247,10 @@ tenant. This project assumes simple username/password SMTP/IMAP.
 ---
 
 ## 5. Troubleshooting
+
+- **Emails repeat forever / monitor never “finishes”**
+  - Check that `HR_EMAIL` and `IOD_EMAIL` are **not** equal to `EMAIL_USERNAME`.
+  - Use separate test mailboxes; see [Critical: separate mailboxes](#critical-separate-mailboxes-avoid-infinite-loops).
 
 - **Authentication failed**
   - Check `EMAIL_USERNAME` / `EMAIL_PASSWORD`.

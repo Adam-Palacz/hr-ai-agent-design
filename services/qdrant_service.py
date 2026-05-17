@@ -3,19 +3,75 @@ Qdrant RAG service for recruitment knowledge base.
 """
 
 import uuid
-from typing import List, Dict, Optional, Union
+from typing import List, Dict, Optional, Union, Literal
+
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 
-# Azure OpenAI imports
 try:
-    from openai import AzureOpenAI
+    from openai import AzureOpenAI, OpenAI
 
-    AZURE_OPENAI_AVAILABLE = True
+    OPENAI_SDK_AVAILABLE = True
 except ImportError:
-    AZURE_OPENAI_AVAILABLE = False
+    OPENAI_SDK_AVAILABLE = False
+    AzureOpenAI = None  # type: ignore[misc, assignment]
+    OpenAI = None  # type: ignore[misc, assignment]
 
 from core.logger import logger
+
+EmbeddingProvider = Literal["azure", "openai"]
+EMBEDDING_VECTOR_SIZE = 1536  # text-embedding-3-small
+
+
+def create_qdrant_rag(
+    collection_name: str = "recruitment_knowledge_base",
+    *,
+    qdrant_host: Optional[str] = None,
+    qdrant_port: Optional[int] = None,
+    qdrant_path: Optional[str] = None,
+) -> "QdrantRAG":
+    """
+    Build QdrantRAG using ``LLM_PROVIDER`` from settings (azure or openai).
+
+    Raises:
+        RuntimeError: if required credentials for the selected provider are missing.
+    """
+    from config import settings
+
+    qdrant_kwargs = {
+        "collection_name": collection_name,
+        "qdrant_host": qdrant_host,
+        "qdrant_port": qdrant_port,
+        "qdrant_path": qdrant_path,
+    }
+
+    if settings.uses_openai_provider:
+        if not settings.openai_api_key:
+            raise RuntimeError(
+                "OPENAI_API_KEY is not set in .env. "
+                "Required for embeddings when LLM_PROVIDER=openai."
+            )
+        return QdrantRAG(
+            embedding_provider="openai",
+            openai_api_key=settings.openai_api_key,
+            openai_base_url=settings.openai_base_url,
+            openai_embedding_model=settings.openai_embedding_model,
+            **qdrant_kwargs,
+        )
+
+    if not settings.azure_openai_api_key:
+        raise RuntimeError(
+            "AZURE_OPENAI_API_KEY is not set in .env. "
+            "Required for embeddings when LLM_PROVIDER=azure (recommended for production)."
+        )
+    return QdrantRAG(
+        embedding_provider="azure",
+        azure_endpoint=settings.azure_openai_endpoint,
+        azure_api_key=settings.azure_openai_api_key,
+        azure_deployment=settings.azure_openai_embedding_deployment,
+        azure_api_version=settings.azure_openai_api_version,
+        **qdrant_kwargs,
+    )
 
 
 class QdrantRAG:
@@ -24,33 +80,25 @@ class QdrantRAG:
     def __init__(
         self,
         collection_name: str = "recruitment_knowledge_base",
-        use_azure_openai: bool = False,
+        *,
+        embedding_provider: EmbeddingProvider = "azure",
+        use_azure_openai: Optional[bool] = None,
         azure_endpoint: Optional[str] = None,
         azure_api_key: Optional[str] = None,
         azure_deployment: Optional[str] = None,
         azure_api_version: Optional[str] = None,
+        openai_api_key: Optional[str] = None,
+        openai_base_url: Optional[str] = None,
+        openai_embedding_model: Optional[str] = None,
         qdrant_path: Optional[str] = None,
         qdrant_host: Optional[str] = None,
         qdrant_port: Optional[int] = None,
     ):
-        """
-        Initialize Qdrant RAG service.
+        if use_azure_openai is not None:
+            embedding_provider = "azure" if use_azure_openai else "openai"
+        self.embedding_provider: EmbeddingProvider = embedding_provider.lower()  # type: ignore[assignment]
 
-        Args:
-            collection_name: Collection name
-            use_azure_openai: Whether to use Azure OpenAI embeddings
-            azure_endpoint: Azure OpenAI endpoint URL
-            azure_api_key: Azure OpenAI API key
-            azure_deployment: Deployment name (e.g., "text-embedding-3-small")
-            azure_api_version: Azure OpenAI API version
-            qdrant_path: Path to local Qdrant database (None = in-memory or server)
-            qdrant_host: Qdrant server hostname (e.g., "qdrant" or "localhost")
-            qdrant_port: Qdrant server port (default: 6333)
-        """
-        # Initialize Qdrant client
-        # Priority: server (host+port) > local path > in-memory
         if qdrant_host:
-            # Connect to Qdrant server
             qdrant_port = qdrant_port or 6333
             self.client = QdrantClient(host=qdrant_host, port=qdrant_port)
             logger.info(f"Qdrant server connection: {qdrant_host}:{qdrant_port}")
@@ -67,60 +115,77 @@ class QdrantRAG:
                     )
                     logger.error(error_msg)
                     raise RuntimeError(error_msg) from e
-                else:
-                    raise
+                raise
         else:
-            self.client = QdrantClient(":memory:")  # In-memory
+            self.client = QdrantClient(":memory:")
             logger.info("Qdrant in-memory database")
 
         self.collection_name = collection_name
+        self._init_embedding_client(
+            azure_endpoint=azure_endpoint,
+            azure_api_key=azure_api_key,
+            azure_deployment=azure_deployment,
+            azure_api_version=azure_api_version,
+            openai_api_key=openai_api_key,
+            openai_base_url=openai_base_url,
+            openai_embedding_model=openai_embedding_model,
+        )
+        self._ensure_collection()
 
-        # Initialize Azure OpenAI if needed
-        if use_azure_openai and azure_endpoint and azure_api_key:
-            if not AZURE_OPENAI_AVAILABLE:
-                raise ImportError("openai is not installed. Run: pip install openai")
+    def _init_embedding_client(
+        self,
+        *,
+        azure_endpoint: Optional[str],
+        azure_api_key: Optional[str],
+        azure_deployment: Optional[str],
+        azure_api_version: Optional[str],
+        openai_api_key: Optional[str],
+        openai_base_url: Optional[str],
+        openai_embedding_model: Optional[str],
+    ) -> None:
+        if not OPENAI_SDK_AVAILABLE:
+            raise ImportError("openai is not installed. Run: pip install openai")
 
-            self.azure_client = AzureOpenAI(
+        if self.embedding_provider == "azure":
+            if not (azure_endpoint and azure_api_key):
+                raise ValueError("Azure OpenAI credentials are required for Azure embeddings")
+            self.embedding_client = AzureOpenAI(
                 api_version=azure_api_version or "2024-12-01-preview",
                 azure_endpoint=azure_endpoint,
                 api_key=azure_api_key,
             )
-            self.azure_deployment = azure_deployment or "text-embedding-3-small"
-            self.use_azure_openai = True
-            logger.info(f"Using Azure OpenAI embeddings (deployment: {self.azure_deployment})")
+            self.embedding_model = azure_deployment or "text-embedding-3-small"
+            logger.info(f"Embeddings: Azure OpenAI (deployment: {self.embedding_model})")
+        elif self.embedding_provider == "openai":
+            if not openai_api_key:
+                raise ValueError("OPENAI_API_KEY is required for OpenAI embeddings")
+            client_kwargs = {"api_key": openai_api_key}
+            if openai_base_url:
+                client_kwargs["base_url"] = openai_base_url
+            self.embedding_client = OpenAI(**client_kwargs)
+            self.embedding_model = openai_embedding_model or "text-embedding-3-small"
+            logger.info(f"Embeddings: OpenAI API (model: {self.embedding_model})")
         else:
-            self.use_azure_openai = False
-            raise ValueError("Azure OpenAI credentials must be provided")
+            raise ValueError(f"Unknown embedding provider: {self.embedding_provider}")
 
-        # Create collection if it doesn't exist
+    def _ensure_collection(self) -> None:
         try:
-            self.client.get_collection(collection_name)
-            logger.info(f"Loaded existing collection: {collection_name}")
+            self.client.get_collection(self.collection_name)
+            logger.info(f"Loaded existing collection: {self.collection_name}")
         except Exception:
-            # Create new collection
-            # text-embedding-3-small has 1536 dimensions
             self.client.create_collection(
-                collection_name=collection_name,
-                vectors_config=VectorParams(
-                    size=1536, distance=Distance.COSINE  # text-embedding-3-small
-                ),
+                collection_name=self.collection_name,
+                vectors_config=VectorParams(size=EMBEDDING_VECTOR_SIZE, distance=Distance.COSINE),
             )
-            logger.info(f"Created new collection: {collection_name}")
+            logger.info(f"Created new collection: {self.collection_name}")
 
     def _generate_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Generate embeddings for a list of texts."""
-        if not self.use_azure_openai:
-            raise ValueError("Azure OpenAI is not configured")
-
-        response = self.azure_client.embeddings.create(
-            input=texts, model=self.azure_deployment, timeout=60.0
+        response = self.embedding_client.embeddings.create(
+            input=texts, model=self.embedding_model, timeout=60.0
         )
-
-        # Return embeddings in order matching input
         embeddings: List[List[float]] = [[] for _ in range(len(texts))]
         for item in response.data:
             embeddings[item.index] = item.embedding
-
         return embeddings
 
     def add_documents(
@@ -131,17 +196,14 @@ class QdrantRAG:
     ):
         """Add documents to collection."""
         if ids is None:
-            # Generate UUID for each document
             ids = [uuid.uuid4() for _ in range(len(documents))]
         else:
-            # Convert string IDs to UUID if needed
             converted_ids: List[Union[str, int, uuid.UUID]] = []
             for id_val in ids:
                 if isinstance(id_val, str):
                     try:
                         converted_ids.append(uuid.UUID(id_val))
                     except ValueError:
-                        # If not UUID, generate new UUID
                         converted_ids.append(uuid.uuid4())
                 elif isinstance(id_val, int):
                     converted_ids.append(id_val)
@@ -163,7 +225,7 @@ class QdrantRAG:
                 vector=embeddings[i],
                 payload={
                     "document": documents[i],
-                    "original_id": str(ids[i]),  # Save original ID in payload
+                    "original_id": str(ids[i]),
                     **metadatas[i],
                 },
             )
@@ -179,24 +241,19 @@ class QdrantRAG:
         query_embedding = self._generate_embeddings([query])[0]
 
         logger.debug("Searching in Qdrant...")
-        # Use search API (works with Qdrant 1.8.4+)
         try:
-            # Try search method first (standard API)
             results = self.client.search(
                 collection_name=self.collection_name, query_vector=query_embedding, limit=n_results
             )
         except (AttributeError, Exception) as e:
-            # Fallback for older Qdrant versions or different API
             logger.warning(f"Search method failed ({e}), trying alternative API...")
             try:
-                # Try scroll with vectors (for manual similarity calculation)
                 scroll_results = self.client.scroll(
                     collection_name=self.collection_name,
-                    limit=100,  # Get more points to calculate similarity
+                    limit=100,
                     with_payload=True,
-                    with_vectors=True,  # Need vectors for similarity calculation
+                    with_vectors=True,
                 )
-                # Calculate distances manually (simple cosine similarity)
                 import numpy as np
 
                 query_vec = np.array(query_embedding)
@@ -204,22 +261,18 @@ class QdrantRAG:
                 for point in scroll_results[0]:
                     if point.vector:
                         point_vec = np.array(point.vector)
-                        # Cosine similarity
                         similarity = np.dot(query_vec, point_vec) / (
                             np.linalg.norm(query_vec) * np.linalg.norm(point_vec)
                         )
                         scored_results.append((point, similarity))
-
-                # Sort by similarity and take top n
                 scored_results.sort(key=lambda x: x[1], reverse=True)
-                results = [point for point, score in scored_results[:n_results]]
+                results = [point for point, _ in scored_results[:n_results]]
             except Exception as e2:
                 logger.error(f"All search methods failed: {e2}")
                 return []
 
         formatted_results = []
         for point in results:
-            # Handle both search result format and scroll format
             point_id = point.id if hasattr(point, "id") else getattr(point, "id", None)
             point_payload = (
                 point.payload if hasattr(point, "payload") else getattr(point, "payload", {})
@@ -228,7 +281,7 @@ class QdrantRAG:
 
             formatted_results.append(
                 {
-                    "id": str(point_id),  # Convert UUID to string
+                    "id": str(point_id),
                     "document": point_payload.get("document", ""),
                     "metadata": {
                         k: v
@@ -249,12 +302,10 @@ class QdrantRAG:
 
     def get_all(self) -> List[Dict]:
         """Get all documents from collection."""
-        results = self.client.scroll(
-            collection_name=self.collection_name, limit=10000  # Large limit
-        )
+        results = self.client.scroll(collection_name=self.collection_name, limit=10000)
 
         formatted_results = []
-        for point in results[0]:  # results[0] is list of points
+        for point in results[0]:
             formatted_results.append(
                 {
                     "id": point.id,

@@ -12,7 +12,7 @@ from dotenv import load_dotenv  # type: ignore[attr-defined]
 # Add parent directory to path to import services
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from services.qdrant_service import QdrantRAG
+from services.qdrant_service import create_qdrant_rag
 
 load_dotenv()
 
@@ -78,14 +78,6 @@ def main():
     print("LOADING KNOWLEDGE BASE TO QDRANT")
     print("=" * 60)
 
-    azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-    azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
-    azure_deployment = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-3-small")
-    azure_api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
-
-    if not azure_api_key:
-        raise RuntimeError("AZURE_OPENAI_API_KEY is not set in .env")
-
     # Load documents
     documents, metadatas, ids = load_documents_from_files("knowledge_base")
 
@@ -102,30 +94,14 @@ def main():
 
     try:
         if qdrant_host:
-            # Use Qdrant server
             print(f"📤 Loading to Qdrant server ({qdrant_host}:{qdrant_port})...")
-            db = QdrantRAG(
-                collection_name="recruitment_knowledge_base",
-                use_azure_openai=True,
-                azure_endpoint=azure_endpoint,
-                azure_api_key=azure_api_key,
-                azure_deployment=azure_deployment,
-                azure_api_version=azure_api_version,
+            db = create_qdrant_rag(
                 qdrant_host=qdrant_host,
                 qdrant_port=qdrant_port,
             )
         else:
-            # Use local database (default)
             print("📤 Loading to local Qdrant database...")
-            db = QdrantRAG(
-                collection_name="recruitment_knowledge_base",
-                use_azure_openai=True,
-                azure_endpoint=azure_endpoint,
-                azure_api_key=azure_api_key,
-                azure_deployment=azure_deployment,
-                azure_api_version=azure_api_version,
-                qdrant_path="./qdrant_db",
-            )
+            db = create_qdrant_rag(qdrant_path="./qdrant_db")
     except (RuntimeError, Exception) as e:
         error_str = str(e)
         if (

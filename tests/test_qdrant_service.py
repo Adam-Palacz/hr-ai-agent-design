@@ -3,7 +3,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
 
-
 @pytest.fixture
 def mock_qdrant_client():
     """Mock QdrantClient: get_collection raises (new DB), create_collection exists, upsert/search work."""
@@ -20,6 +19,26 @@ def mock_qdrant_client():
     client.scroll.return_value = ([], None)
     client.get_collection.return_value = MagicMock(points_count=0)
     return client
+
+
+@patch("services.qdrant_service.QdrantRAG")
+def test_create_qdrant_rag_uses_openai_when_configured(mock_rag_cls):
+    """create_qdrant_rag passes OpenAI credentials when LLM_PROVIDER=openai."""
+    from config import settings as app_settings
+    from services.qdrant_service import create_qdrant_rag
+
+    with (
+        patch.object(app_settings, "llm_provider", "openai"),
+        patch.object(app_settings, "openai_api_key", "sk-test"),
+        patch.object(app_settings, "openai_base_url", None),
+        patch.object(app_settings, "openai_embedding_model", "text-embedding-3-small"),
+    ):
+        create_qdrant_rag(qdrant_path="./test_db")
+
+    mock_rag_cls.assert_called_once()
+    call_kwargs = mock_rag_cls.call_args.kwargs
+    assert call_kwargs["embedding_provider"] == "openai"
+    assert call_kwargs["openai_api_key"] == "sk-test"
 
 
 @patch("services.qdrant_service.QdrantClient")
@@ -63,6 +82,30 @@ def test_qdrant_rag_search_returns_expected_structure(
         assert "id" in r or "document" in r
         assert "document" in r
     mock_qdrant_client.search.assert_called_once()
+
+
+@patch("services.qdrant_service.QdrantClient")
+@patch("services.qdrant_service.OpenAI")
+def test_qdrant_rag_openai_embeddings(mock_openai_cls, mock_qdrant_cls, mock_qdrant_client):
+    """OpenAI embedding provider uses OpenAI client for embeddings."""
+    mock_qdrant_cls.return_value = mock_qdrant_client
+    mock_emb = MagicMock()
+    mock_emb.data = [MagicMock(index=0, embedding=[0.1] * 1536)]
+    mock_openai_cls.return_value.embeddings.create.return_value = mock_emb
+
+    from services.qdrant_service import QdrantRAG
+
+    rag = QdrantRAG(
+        collection_name="test_coll",
+        embedding_provider="openai",
+        openai_api_key="sk-test",
+        openai_embedding_model="text-embedding-3-small",
+        qdrant_host="localhost",
+        qdrant_port=6333,
+    )
+    rag.client = mock_qdrant_client
+    rag.search("test query", n_results=1)
+    mock_openai_cls.return_value.embeddings.create.assert_called()
 
 
 @patch("services.qdrant_service.QdrantClient")

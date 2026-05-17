@@ -6,7 +6,7 @@ Person(candidate, "Candidate", "Receives feedback emails and can reply or ask qu
 
 System(system, "Recruitment AI system", "Flask-based recruitment support app.")
 
-System_Ext(llm, "LLM provider", "Azure OpenAI (default) or OpenAI.")
+System_Ext(llm, "LLM provider", "OpenAI for local demo or Azure OpenAI for production.")
 System_Ext(mail, "Mail server", "SMTP/IMAP provider (Zoho, Gmail, O365, etc.).")
 System_Ext(qdrant, "Qdrant", "Vector database used for RAG knowledge base.")
 

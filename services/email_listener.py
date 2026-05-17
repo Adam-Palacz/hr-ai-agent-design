@@ -56,10 +56,18 @@ class EmailListener:
         "odmawiam",
         "nie",
         "nie chcę",
+        "nie chce",
+        "nie chcę brać udziału",
+        "nie chce brac udzialu",
+        "nie chcę uczestniczyć",
+        "nie chce uczestniczyc",
         "nie wyrażam zgody",
+        "nie wyrazam zgody",
         "wycofuję zgodę",
+        "wycofuje zgode",
         "nie jestem zainteresowany",
         "nie rozważaj",
+        "nie rozwazaj",
     ]
 
     def __init__(
@@ -361,6 +369,11 @@ class EmailListener:
         "automatyczna decyzja",
     ]
 
+    @staticmethod
+    def _keyword_in_text(keyword: str, text: str) -> bool:
+        """Match an IOD keyword as a token, not inside another word."""
+        return bool(re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", text, re.IGNORECASE))
+
     def _classify_iod_by_keywords(self, email_data: Dict) -> str:
         """
         Fast, deterministic IOD detection from subject + body (no LLM).
@@ -371,7 +384,7 @@ class EmailListener:
         text = f"{email_data.get('subject', '')} {email_data.get('body', '')}".lower()
 
         found_iod_keywords = [
-            kw for kw in self._CRITICAL_IOD_KEYWORDS_FAST_PATH if kw.lower() in text
+            kw for kw in self._CRITICAL_IOD_KEYWORDS_FAST_PATH if self._keyword_in_text(kw, text)
         ]
         if len(found_iod_keywords) >= 1:
             logger.info(f"Email classified as IOD (keyword fast path: {found_iod_keywords})")
@@ -420,15 +433,17 @@ class EmailListener:
 
         # Legacy fallback when LLM is unavailable/failing: consent keywords only
         text = f"{email_data.get('subject', '')} {email_data.get('body', '')}".lower()
-        for keyword in self.CONSENT_KEYWORDS_POSITIVE:
-            if keyword.lower() in text:
-                logger.info(f"Email classified as consent_yes (fallback keyword: {keyword})")
-                return "consent_yes"
-
+        # Check negative consent first: messages like "nie chcę ... inne rekrutacje"
+        # contain positive context words, but the explicit negation is authoritative.
         for keyword in self.CONSENT_KEYWORDS_NEGATIVE:
             if keyword.lower() in text:
                 logger.info(f"Email classified as consent_no (fallback keyword: {keyword})")
                 return "consent_no"
+
+        for keyword in self.CONSENT_KEYWORDS_POSITIVE:
+            if keyword.lower() in text:
+                logger.info(f"Email classified as consent_yes (fallback keyword: {keyword})")
+                return "consent_yes"
 
         logger.info("Email classified as default (HR) — no IOD keyword match and no LLM result")
         return "default"

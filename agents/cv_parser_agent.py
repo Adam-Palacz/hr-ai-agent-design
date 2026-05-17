@@ -1,7 +1,8 @@
 """Azure OpenAI agent for parsing CV from PDF files (no LangChain)."""
 
 import json
-from typing import Optional, Dict, Any
+from pathlib import Path
+from typing import Optional, Dict, Any, List, Union
 
 from models.cv_models import CVData
 from prompts.cv_parsing_prompt import CV_PARSING_PROMPT
@@ -44,6 +45,94 @@ class CVParserAgent(BaseAgent):
         self.vision_model_name = vision_model_name
 
         # We don't use PydanticOutputParser anymore; parsing is done manually via JSON + _transform_llm_response.
+
+    @staticmethod
+    def _stringify_list_items(items: List[Union[str, dict, Any]]) -> List[str]:
+        """Normalize list entries from LLM JSON (strings or dicts) to plain strings."""
+        result: List[str] = []
+        for item in items:
+            if isinstance(item, str):
+                result.append(item)
+            elif isinstance(item, dict):
+                parts = [
+                    str(item[key])
+                    for key in ("name", "title", "project_name", "role", "description", "summary")
+                    if item.get(key)
+                ]
+                result.append(" - ".join(parts) if parts else json.dumps(item, ensure_ascii=False))
+            elif item is not None:
+                result.append(str(item))
+        return result
+
+    def _resolve_candidate_identity(
+        self, pdf_path: str, candidate_id: Optional[int] = None
+    ) -> tuple[str, Optional[str]]:
+        """Name and email from DB candidate or PDF filename fallback."""
+        full_name = Path(pdf_path).stem.replace("-", " ").replace("_", " ").strip() or "Candidate"
+        email: Optional[str] = None
+
+        if candidate_id is not None:
+            try:
+                from database.candidates import get_candidate_by_id
+
+                candidate = get_candidate_by_id(candidate_id)
+                if candidate:
+                    if candidate.full_name:
+                        full_name = candidate.full_name
+                    email = candidate.email or None
+            except Exception as e:
+                logger.warning(f"Could not load candidate {candidate_id} for CV stub: {e}")
+
+        return full_name, email
+
+    def _cv_data_without_parsing(
+        self, pdf_path: str, candidate_id: Optional[int] = None
+    ) -> CVData:
+        """Stub CVData when CV parsing is fully disabled (no PDF read, no LLM)."""
+        full_name, email = self._resolve_candidate_identity(pdf_path, candidate_id)
+        logger.info(
+            "CV parsing fully skipped (CV_PARSING_ENABLED=false); "
+            "using candidate/profile data only (no PDF text)"
+        )
+        return CVData(
+            full_name=full_name,
+            email=email,
+            summary=None,
+            education=[],
+            experience=[],
+            skills=[],
+            certifications=[],
+            languages=[],
+        )
+
+    def _cv_data_from_extracted_text(
+        self,
+        cv_text: str,
+        pdf_path: str,
+        candidate_id: Optional[int] = None,
+    ) -> CVData:
+        """Build minimal CVData from PDF text when LLM structured parsing is disabled."""
+        full_name, email = self._resolve_candidate_identity(pdf_path, candidate_id)
+
+        summary_limit = min(len(cv_text), settings.max_text_length)
+        summary = cv_text[:summary_limit].strip()
+        if len(cv_text) > summary_limit:
+            summary += "\n\n[... text truncated ...]"
+
+        logger.info(
+            "CV LLM parsing skipped (CV_LLM_PARSING_ENABLED=false); "
+            f"using {len(summary)} chars of extracted text in summary"
+        )
+        return CVData(
+            full_name=full_name,
+            email=email,
+            summary=summary or None,
+            education=[],
+            experience=[],
+            skills=[],
+            certifications=[],
+            languages=[],
+        )
 
     def _transform_llm_response(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -177,28 +266,37 @@ class CVParserAgent(BaseAgent):
                 if additional_info.get("hobbies"):
                     hobbies = additional_info["hobbies"]
                     if isinstance(hobbies, list):
-                        parts.append(f"Hobbies: {', '.join(hobbies)}")
+                        parts.append(
+                            f"Hobbies: {', '.join(self._stringify_list_items(hobbies))}"
+                        )
                     else:
                         parts.append(f"Hobbies: {hobbies}")
 
                 if additional_info.get("projects"):
                     projects = additional_info["projects"]
                     if isinstance(projects, list):
-                        parts.append(f"Projects: {'; '.join(projects)}")
+                        parts.append(
+                            f"Projects: {'; '.join(self._stringify_list_items(projects))}"
+                        )
                     else:
                         parts.append(f"Projects: {projects}")
 
                 if additional_info.get("awards"):
                     awards = additional_info["awards"]
                     if isinstance(awards, list):
-                        parts.append(f"Awards: {', '.join(awards)}")
+                        parts.append(
+                            f"Awards: {', '.join(self._stringify_list_items(awards))}"
+                        )
                     else:
                         parts.append(f"Awards: {awards}")
 
                 if additional_info.get("other_activities"):
                     activities = additional_info["other_activities"]
                     if isinstance(activities, list):
-                        parts.append(f"Other Activities: {', '.join(activities)}")
+                        parts.append(
+                            "Other Activities: "
+                            + ", ".join(self._stringify_list_items(activities))
+                        )
                     else:
                         parts.append(f"Other Activities: {activities}")
 
@@ -234,9 +332,17 @@ class CVParserAgent(BaseAgent):
         logger.info("CV PARSING PROCESS STARTED")
         logger.info("=" * 80)
         logger.info(f"PDF file: {pdf_path}")
+        logger.info(f"CV parsing enabled: {settings.cv_parsing_enabled}")
+        logger.info(f"CV LLM parsing enabled: {settings.cv_llm_parsing_enabled}")
         logger.info(f"OCR enabled: {self.use_ocr}")
         logger.info(f"Vision model: {self.vision_model_name if self.vision_model_name else 'N/A'}")
         logger.info(f"Text model: {self.model_name}")
+
+        if not settings.cv_parsing_enabled:
+            total_time = time.time() - start_time
+            logger.info(f"CV parsing completed (fully skipped) in {total_time:.2f}s total")
+            logger.info("=" * 80)
+            return self._cv_data_without_parsing(pdf_path, candidate_id)
 
         if verbose:
             print("\n" + "=" * 80)
@@ -295,6 +401,12 @@ class CVParserAgent(BaseAgent):
                 f"Warning: Prompt may be too long for {self.model_name}. "
                 f"Consider using gpt-4o-mini or gpt-4.1-nano for better reliability with long CVs."
             )
+
+        if not settings.cv_llm_parsing_enabled:
+            total_time = time.time() - start_time
+            logger.info(f"CV parsing completed (LLM skipped) in {total_time:.2f}s total")
+            logger.info("=" * 80)
+            return self._cv_data_from_extracted_text(cv_text, pdf_path, candidate_id)
 
         # Run LLM via Azure OpenAI
         try:
