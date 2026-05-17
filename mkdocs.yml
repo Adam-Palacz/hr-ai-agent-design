@@ -8,8 +8,13 @@ nav:
       - Przegląd (PL): OVERVIEW_PL.md
       - Overview (EN): OVERVIEW_EN.md
   - Quickstart:
+      - Pierwsze uruchomienie – nietechnicznie (PL): QUICKSTART_NONTECH_PL.md
+      - First run – non-technical (EN): QUICKSTART_NONTECH_EN.md
       - Szybki start (PL): QUICKSTART_PL.md
       - Quickstart (EN): QUICKSTART_EN.md
+  - User Guide:
+      - Obsługa aplikacji (PL): USER_GUIDE_PL.md
+      - Using the application (EN): USER_GUIDE_EN.md
   - Docker:
       - Uruchomienie w Dockerze (PL): DOCKER_PL.md
       - Docker guide (EN): DOCKER_EN.md

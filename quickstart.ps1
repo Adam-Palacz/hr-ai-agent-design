@@ -46,11 +46,13 @@ if (-not (Test-Path $envPath)) {
     if (Test-Path $envExample) {
         Copy-Item $envExample $envPath
         Write-Host ''
-        Write-Host 'Created .env from .env.example. Please edit .env and set AZURE_OPENAI_API_KEY and other variables.' -ForegroundColor Yellow
+        Write-Host 'Created .env from .env.example.' -ForegroundColor Yellow
+        Write-Host 'For a local demo, edit .env and set OPENAI_API_KEY (LLM_PROVIDER=openai is already selected).' -ForegroundColor Yellow
+        Write-Host 'For production, use LLM_PROVIDER=azure and set Azure OpenAI variables in an EU Azure region.' -ForegroundColor Yellow
         Write-Host 'Then run this script again to start the app.' -ForegroundColor Yellow
         exit 0
     }
-    Write-Host '.env not found. Create .env with at least AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT.' -ForegroundColor Yellow
+    Write-Host '.env not found. Create .env with OPENAI_API_KEY for demo, or Azure OpenAI variables for production.' -ForegroundColor Yellow
 }
 
 Write-Host ''

@@ -40,11 +40,13 @@ if [[ ! -f "$PROJECT_ROOT/.env" ]]; then
   if [[ -f "$PROJECT_ROOT/.env.example" ]]; then
     cp "$PROJECT_ROOT/.env.example" "$PROJECT_ROOT/.env"
     echo ""
-    echo "Created .env from .env.example. Please edit .env and set AZURE_OPENAI_API_KEY and other variables."
+    echo "Created .env from .env.example."
+    echo "For a local demo, edit .env and set OPENAI_API_KEY (LLM_PROVIDER=openai is already selected)."
+    echo "For production, use LLM_PROVIDER=azure and set Azure OpenAI variables in an EU Azure region."
     echo "Then run this script again to start the app."
     exit 0
   fi
-  echo ".env not found. Create .env with at least AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT."
+  echo ".env not found. Create .env with OPENAI_API_KEY for demo, or Azure OpenAI variables for production."
 fi
 
 echo ""

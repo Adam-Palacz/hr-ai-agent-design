@@ -25,6 +25,14 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "evaluation: marks tests that may use real LLM (run with RUN_LLM_EVAL=1)"
     )
+    config.addinivalue_line(
+        "markers",
+        "ai_agent: marks tests for AI agent behaviour (mocked LLM unless evaluation)",
+    )
+    config.addinivalue_line(
+        "markers",
+        "live: real API/SMTP tests (run with LIVE_TEST=1, uses .env credentials)",
+    )
 
 
 @pytest.fixture(scope="session", autouse=True)

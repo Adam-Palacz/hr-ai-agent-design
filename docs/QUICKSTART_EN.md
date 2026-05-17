@@ -3,6 +3,9 @@
 This guide walks a **new user** through running the project
 for the first time.
 
+> **Non-technical first run (~30 min, no email or Docker):**
+> [First run – non-technical guide](QUICKSTART_NONTECH_EN.md)
+
 ---
 
 ## 1. Prerequisites
@@ -15,16 +18,49 @@ for the first time.
   ```
 
 - **Git** – to clone the repository.
-- **Azure account with Azure OpenAI** – you need:
-  - the endpoint URL (e.g. `https://...openai.azure.com`),
-  - an API key,
-  - deployment names for the GPT model and the embedding model.
-- **(Optional) Email account with SMTP/IMAP** – e.g. Zoho, Gmail:
-  - SMTP/IMAP login and password (often an app password),
-  - SMTP/IMAP host and port (e.g. `smtp.zoho.eu:587`, `imap.zoho.eu:993`).
+- **LLM account (choose one):**
+  - **OpenAI API**: simplest for a local demo; API key (`OPENAI_API_KEY`) and model name (`OPENAI_CHAT_MODEL`),
+  - **Azure OpenAI**: recommended for production; endpoint URL, API key, GPT/embedding deployment names in your selected Azure region, preferably in the EU.
+- **(Optional) Email with SMTP + IMAP** – see [Email setup](EMAIL_SETUP_EN.md):
+  - **SMTP** = sending mail; **IMAP** = reading the monitored inbox.
+  - You need **at least three different addresses** for demos (bot inbox, HR, IOD).
+  - **Never** set `HR_EMAIL` or `IOD_EMAIL` to the same address as `EMAIL_USERNAME`
+    (infinite processing loop). Zoho is used in examples because it allows several
+    mailboxes on one domain; any provider with multiple inboxes works too.
 
-> You do **not** need email configured to start;
-> the app will still run, but sending/monitoring emails will be disabled.
+> **Email and the product goal:** the main flow is **sending personalized feedback by
+> email to the candidate** — that requires SMTP (`EMAIL_USERNAME`, `EMAIL_PASSWORD`,
+> hosts). Without mail, the app **starts** and **generates** feedback text (AI), but
+> **does not deliver** it to the candidate — you only see it in the admin UI. This
+> guide assumes full setup; UI/AI-only trial without sending:
+> [non-technical guide](QUICKSTART_NONTECH_EN.md).
+
+### Where to get API keys and model settings?
+
+- **Azure OpenAI:**
+  1. Open Azure AI Foundry / Azure Portal and select your Azure OpenAI resource.
+  2. Copy the **endpoint** and **API key**.
+  3. Check deployment names (chat + embedding) and set
+     `AZURE_OPENAI_GPT_DEPLOYMENT` and `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`.
+- **OpenAI API:**
+  1. Open OpenAI platform and create an **API key**.
+  2. Put it in `.env` as `OPENAI_API_KEY`.
+  3. Set `OPENAI_CHAT_MODEL` and `LLM_PROVIDER=openai`.
+
+### Official sources / docs
+
+**LLM (what you are configuring):**
+
+- [OpenAI platform overview](https://platform.openai.com/docs/overview) — what the API is
+  and how billing/models work.
+- [OpenAI API keys](https://platform.openai.com/api-keys) — create the secret you put in
+  `OPENAI_API_KEY` (treat it like a password; do not commit it).
+- [Azure OpenAI on Microsoft Learn](https://learn.microsoft.com/azure/ai-services/openai/) —
+  resources, deployments, and quotas for `AZURE_OPENAI_*` variables.
+- [Azure AI Foundry](https://ai.azure.com/) — portal to copy endpoint, key, and deployment names.
+
+**Email (only if you enable monitoring):** full walkthrough in
+[Email setup (SMTP/IMAP)](EMAIL_SETUP_EN.md) — SMTP/IMAP basics, separate mailboxes, Zoho/Gmail steps.
 
 ### Installing Python and Git (short version)
 
@@ -42,7 +78,7 @@ for the first time.
 
 ```bash
 git clone <REPO_URL>
-cd BOOK
+cd hr-ai-agent-design
 
 python -m venv venv
 
@@ -68,25 +104,54 @@ Copy the example file and fill in values:
 cp .env.example .env
 ```
 
-**Minimum required** for AI to work:
+The app supports **two LLM providers**:
+
+1. **OpenAI API** (`LLM_PROVIDER=openai`) — simplest for a local demo.
+2. **Azure OpenAI** (`LLM_PROVIDER=azure`) — recommended for production and personal data.
+
+### Option A: OpenAI API (local demo)
+
+| Variable           | Description                                        |
+|--------------------|----------------------------------------------------|
+| `LLM_PROVIDER`     | `openai`                                           |
+| `OPENAI_API_KEY`   | OpenAI API key                                     |
+| `OPENAI_CHAT_MODEL`| Chat model name (e.g. `gpt-4o-mini`)              |
+| `OPENAI_EMBEDDING_MODEL` | Embedding / RAG model (e.g. `text-embedding-3-small`) |
+| `OPENAI_BASE_URL`  | Optional, default `https://api.openai.com/v1`     |
+
+### Option B: Azure OpenAI (production)
 
 | Variable                          | Description                                      |
 |-----------------------------------|--------------------------------------------------|
+| `LLM_PROVIDER`                    | `azure`                                          |
 | `AZURE_OPENAI_API_KEY`           | Azure OpenAI API key                             |
 | `AZURE_OPENAI_ENDPOINT`          | Azure OpenAI endpoint URL                        |
-| `AZURE_OPENAI_GPT_DEPLOYMENT`    | GPT deployment name (e.g. `gpt-4.1-nano`)        |
+| `AZURE_OPENAI_GPT_DEPLOYMENT`    | GPT deployment name (e.g. `gpt-4o-mini`)         |
 | `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | Embedding deployment (e.g. `text-embedding-3-small`) |
+
+For production, choose an Azure region that matches your organization’s
+requirements; for candidate data, an EU region is recommended.
+
+### Which provider to choose?
+
+| Environment | `LLM_PROVIDER` | Why |
+|-------------|----------------|-----|
+| **Local test / dev** | `openai` | One `OPENAI_API_KEY` for chat, feedback, **and** Qdrant (RAG). |
+| **Production / personal data** | `azure` | Recommended: EU Azure region, data residency and enterprise policy. |
+
+With `LLM_PROVIDER=openai`, embeddings use `OPENAI_EMBEDDING_MODEL` (default
+`text-embedding-3-small`). With `azure`, use `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`.
 
 **Optional – email sending and monitoring:**
 
-- `EMAIL_USERNAME`, `EMAIL_PASSWORD`
-- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USE_TLS`
-- `IMAP_HOST`, `IMAP_PORT`
-- `EMAIL_MONITOR_ENABLED`
-- `IOD_EMAIL`, `HR_EMAIL`, `EMAIL_CHECK_INTERVAL`
+- `EMAIL_USERNAME`, `EMAIL_PASSWORD` — login for **IMAP (listen)** and **SMTP (send)**.
+- `SMTP_*`, `IMAP_*` — server hostnames/ports from your provider.
+- `EMAIL_MONITOR_ENABLED`, `EMAIL_CHECK_INTERVAL` — background inbox polling.
+- `IOD_EMAIL`, `HR_EMAIL` — **other** mailboxes for forwards (must differ from `EMAIL_USERNAME`).
 
-> Recommended: start with Azure OpenAI only, then configure email
-> once the basic app works.
+> Recommended: start with one LLM provider only (Azure or OpenAI), then configure email
+> once the basic app works. Before enabling the monitor, read
+> [Email setup – separate mailboxes](EMAIL_SETUP_EN.md#critical-separate-mailboxes-avoid-infinite-loops).
 
 ---
 
@@ -121,12 +186,14 @@ example data.
    - choose “Rejected”.
 6. The system will:
    - parse the CV,
-   - generate feedback using Azure OpenAI,
+   - generate feedback using the selected LLM provider (Azure OpenAI or OpenAI API),
    - validate and optionally correct the email,
    - prepare the email to be sent.
 
-If SMTP is configured, the email will be sent;
-otherwise you can still inspect the generated content.
+If SMTP is configured, the email is delivered to the candidate.
+Without SMTP, content is stored and visible in the admin panel (sent emails section),
+at **http://localhost:5000/admin**, in the **“Sent feedback emails”** section,
+but that **does not replace** real recruitment communication.
 
 ---
 
@@ -155,21 +222,25 @@ If you want the system to answer questions based on company documents:
   - errors at startup,
   - errors when generating feedback (401/403 from Azure).
 - **Check:**
-  - `AZURE_OPENAI_API_KEY` is set in `.env` without quotes,
-  - `AZURE_OPENAI_ENDPOINT` is correct,
-  - GPT and embedding deployments exist in Azure.
+  - with `LLM_PROVIDER=openai`: `OPENAI_API_KEY` is set without quotes and OpenAI billing is active,
+  - with `LLM_PROVIDER=azure`: `AZURE_OPENAI_API_KEY` is set without quotes,
+  - `AZURE_OPENAI_ENDPOINT` is correct for Azure,
+  - GPT and embedding deployments exist in Azure if you use Azure.
 
 ### 7.2. SMTP/IMAP errors
 
 - **Symptoms:**
   - “Authentication failed”,
   - unable to send emails,
-  - IMAP logs mentioning invalid credentials.
+  - IMAP logs mentioning invalid credentials,
+  - the same messages processed again and again.
 - **Check:**
   - whether you use an **app password** if required (Gmail, Zoho),
   - host/port values against your provider’s docs,
   - IMAP/SMTP are enabled for the account,
-  - `EMAIL_USERNAME` and `EMAIL_PASSWORD` are correct.
+  - `EMAIL_USERNAME` and `EMAIL_PASSWORD` are correct,
+  - `HR_EMAIL` and `IOD_EMAIL` are **not** the same as `EMAIL_USERNAME`
+    ([details](EMAIL_SETUP_EN.md#critical-separate-mailboxes-avoid-infinite-loops)).
 
 ### 7.3. Qdrant not starting / “connection refused”
 

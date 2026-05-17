@@ -43,8 +43,22 @@ just like for local runs:
 cp .env.example .env
 ```
 
-**Minimum required for AI:**
+**Minimum required for a local OpenAI demo:**
 
+- `LLM_PROVIDER=openai`
+- `OPENAI_API_KEY`
+- `OPENAI_CHAT_MODEL` (for example `gpt-4o-mini`)
+- `OPENAI_EMBEDDING_MODEL` (for example `text-embedding-3-small`, used by RAG/Qdrant)
+
+This is the simplest demo path: one OpenAI key is enough for feedback generation
+and embeddings.
+
+**Recommended for production: Azure OpenAI**
+
+For candidate data and production use, Azure OpenAI is recommended because you can
+choose an EU Azure region and better control the data processing location. Set:
+
+- `LLM_PROVIDER=azure`
 - `AZURE_OPENAI_API_KEY`
 - `AZURE_OPENAI_ENDPOINT`
 - `AZURE_OPENAI_GPT_DEPLOYMENT`
@@ -147,8 +161,8 @@ environment variables and runs:
     docker compose logs app
     ```
 
-  - whether `.env` contains valid `AZURE_OPENAI_API_KEY` and other
-    required variables,
+  - whether `.env` contains a valid `OPENAI_API_KEY` with `LLM_PROVIDER=openai`,
+    or valid `AZURE_OPENAI_*` variables with `LLM_PROVIDER=azure`,
   - whether there are import errors (missing modules – in that case
     rebuild the image).
 

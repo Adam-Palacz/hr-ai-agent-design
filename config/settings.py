@@ -12,9 +12,9 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore"
     )
 
-    # LLM provider selection
-    # azure  – current default, uses Azure OpenAI
-    # openai – optional, uses api.openai.com via OpenAI official client
+    # LLM + embeddings provider (shared):
+    # azure  – recommended for production (EU data residency via Azure region)
+    # openai – convenient for local/dev/test (api.openai.com)
     llm_provider: str = "azure"
 
     # Azure OpenAI Configuration (single source of truth for models)
@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     # IMPORTANT: these names MUST match deployment names in Azure
     azure_openai_gpt_deployment: str = "gpt-5-mini"
     azure_openai_vision_deployment: str = "gpt-5-nano"
+    azure_openai_embedding_deployment: str = "text-embedding-3-small"
 
     # Alias for the current text model „bieżący model tekstowy” – usually points
     # to the Azure deployment; can also be used as a logical model name for
@@ -42,9 +43,13 @@ class Settings(BaseSettings):
     use_ocr: bool = False
     ocr_timeout: int = 600
 
-    # PDF Processing
+    # PDF / CV processing
     max_text_length: int = 15000
     pdf_min_text_threshold: int = 100
+    # When false, skip PDF read and LLM — feedback uses candidate record from DB only
+    cv_parsing_enabled: bool = True
+    # When false (and cv_parsing_enabled=true), read PDF text but skip LLM structured parse
+    cv_llm_parsing_enabled: bool = True
 
     # Logging
     log_level: str = "INFO"
@@ -90,17 +95,27 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = None
     openai_base_url: Optional[str] = None
     openai_chat_model: Optional[str] = None
+    openai_embedding_model: str = "text-embedding-3-small"
+
+    @property
+    def uses_openai_provider(self) -> bool:
+        """True when chat and embeddings use the official OpenAI API."""
+        return self.llm_provider.lower() == "openai"
 
     @property
     def api_key(self) -> str:
         """
-        Returns the API key for **Azure OpenAI**.
+        API key used by legacy call sites (agents, email classifier).
 
-        This property is intentionally Azure-specific and used by parts of the
-        code that historically relied on `AZURE_OPENAI_API_KEY`. The new
-        OpenAI (api.openai.com) support uses `openai_api_key` directly,
-        without going through this property.
+        When ``LLM_PROVIDER=openai``, returns ``OPENAI_API_KEY``; otherwise Azure.
         """
+        if self.llm_provider.lower() == "openai":
+            if not self.openai_api_key:
+                raise ValueError(
+                    "OPENAI_API_KEY not found. "
+                    "Add it to the .env file or environment variables."
+                )
+            return self.openai_api_key
         if not self.azure_openai_api_key:
             raise ValueError(
                 "AZURE_OPENAI_API_KEY not found. "
@@ -115,23 +130,23 @@ class Settings(BaseSettings):
 
     def model_post_init(self, __context) -> None:
         """
-        Additional initialization after settings are loaded.
+        Provider-specific defaults after settings load.
 
-        If Azure OpenAI is configured (endpoint + api_key), we set:
-        - environment variables expected by the OpenAI client (Azure mode),
-        - openai_model to the Azure deployment name (azure_openai_gpt_deployment).
-        This way agents still use the single field settings.openai_model,
-        but actually refer to the Azure deployment.
+        ``LLM_PROVIDER`` is authoritative: Azure env vars and deployment aliases are
+        applied only when provider is Azure, so leftover Azure keys in ``.env`` do not
+        affect OpenAI mode.
         """
+        if self.uses_openai_provider:
+            if self.openai_chat_model:
+                self.openai_model = self.openai_chat_model
+            return
+
         if self.azure_openai_api_key and self.azure_openai_endpoint:
-            # Configure Azure mode for the OpenAI library
             os.environ["OPENAI_API_KEY"] = self.azure_openai_api_key
-            # Use endpoint from Azure portal (e.g. https://xxx.openai.azure.com)
             os.environ["OPENAI_API_BASE"] = self.azure_openai_endpoint
             os.environ["OPENAI_API_TYPE"] = "azure"
             os.environ["OPENAI_API_VERSION"] = self.azure_openai_api_version
 
-            # If deployment name is defined – use it as the model
             if self.azure_openai_gpt_deployment:
                 self.openai_model = self.azure_openai_gpt_deployment
             if self.azure_openai_vision_deployment:

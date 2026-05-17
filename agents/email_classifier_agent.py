@@ -1,5 +1,6 @@
 """Azure OpenAI agent for classifying incoming emails (no LangChain)."""
 
+import re
 from typing import Optional, Literal
 
 from pydantic import BaseModel, Field
@@ -31,6 +32,11 @@ class EmailClassifierAgent(BaseAgent):
     # If the model returns IOD but no literal critical keyword matches, still accept IOD when
     # confidence is at least this threshold (semantic / paraphrased requests without "RODO" etc.).
     IOD_SEMANTIC_MIN_CONFIDENCE: float = 0.85
+
+    @staticmethod
+    def _keyword_in_text(keyword: str, text: str) -> bool:
+        """Match keyword as a token, not as a substring inside unrelated words (e.g. dpo in odpowiedzi)."""
+        return bool(re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", text, re.IGNORECASE))
 
     # Substrings in subject/body that reinforce IOD without being the full critical list (optional signal)
     EXTENDED_IOD_HINTS = [
@@ -215,9 +221,11 @@ DO NOT return:
                 found_keywords = [
                     keyword
                     for keyword in self.CRITICAL_IOD_KEYWORDS
-                    if keyword.lower() in text_lower
+                    if self._keyword_in_text(keyword, text_lower)
                 ]
-                found_hints = [h for h in self.EXTENDED_IOD_HINTS if h.lower() in text_lower]
+                found_hints = [
+                    h for h in self.EXTENDED_IOD_HINTS if self._keyword_in_text(h, text_lower)
+                ]
 
                 has_literal_signal = len(found_keywords) >= 1 or len(found_hints) >= 1
                 high_confidence_semantic = (
